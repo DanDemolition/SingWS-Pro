@@ -40,15 +40,14 @@ Linux VM, Python 3.10: `test_transition_analysis`, `test_analysis_helper_transpo
 - Not changed: runtime Intel branches in `0.2.18.1.py` (`platform.machine()` checks) and their tests; `constraints-macos12.txt` name. Remove in a later, focused cleanup.
 - Deleted unneeded `native_dual_view/Frameworks 2`, `Frameworks-intel-release`, `Frameworks-iina-current-arm64-broken`.
 
-## Done — 2.0 update channel (2026-09-15, source only, not pushed)
+## Done — SingWS Pro update channel (2026-09-15, revised)
 
-- App: `UPDATE_CHANNEL`, `DEFAULT_UPDATE_MANIFEST_URL` (`raw.githubusercontent.com/DanDemolition/SingWS/2.0/docs/release-2.0.json`), `_effective_update_manifest_url()` migrates the 1.x default/blank to the 2.0 URL; custom URLs are kept.
-- `docs/release-2.0.json` placeholder (no downloads). `tools/write_manifest.py` writes it with `channel` and tag-specific URLs (never `releases/latest`).
-- `release.sh`: must run on branch `2.0`; version must be `2.x`; GitHub release is `--prerelease --latest=false`; pushes `2.0`, never main.
-- Why: 1.x reads `main/docs/release.json`, falls back to GitHub "latest", downloads via `releases/latest/download`, and on Intel picks the first DMG if no x86_64 asset exists — a 2.0 "latest" release would reach Intel 1.x machines.
-- `test_release_tools.py`: 20 pass (Linux VM).
-- Known gaps: `_version_key` ignores letters, so `2.0.0b1` sorts after `2.0.0`; **Decided: 4-part numeric versions** (`2.0.0.1`, `2.0.0.2`…). Side-by-side: resolved below. When 2.0 replaces 1.x, the 1.x manifest on main must be pointed at 2.0 deliberately.
-- Operator step: commit on `2.0` and `git push origin 2.0` so the placeholder manifest URL resolves.
+- SingWS Pro has its own **public repo `DanDemolition/SingWSPro`**; 1.x stays in `DanDemolition/SingWS`.
+- App: `DEFAULT_UPDATE_REPO`, `DEFAULT_UPDATE_MANIFEST_URL` (`SingWSPro/main/docs/release.json`); `_effective_update_repo()` / `_effective_update_manifest_url()` migrate 1.x values from imported settings.
+- `docs/release.json` is a Pro placeholder (no downloads). The 1.x download page `docs/index.html` was removed from this tree.
+- `release.sh` refuses unless origin is SingWSPro and branch is `main`; version must be 2.x; normal "latest" releases.
+- 4-part versions (`2.0.0.1`…); `_version_key` ignores letters.
+- Tests: `test_release_tools` + `test_legacy_import` 25 pass (Linux VM).
 
 ## Done — SingWS Pro side-by-side identity (2026-09-15, source only)
 

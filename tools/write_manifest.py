@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Regenerate docs/release-2.0.json (the SingWS 2.0 auto-update manifest) from built DMGs.
+"""Regenerate docs/release.json (the SingWS Pro auto-update manifest) from built DMGs.
 
-2.0 has its own channel: the manifest lives on the `2.0` branch and download URLs
-point at the exact release tag, never `releases/latest`, which belongs to 1.x.
+SingWS Pro has its own repo (DanDemolition/SingWSPro), separate from SingWS 1.x.
+Download URLs point at the exact release tag.
 
 The desktop updater reads this file from GitHub Pages, compares ``version``
 against APP_VERSION, and verifies the download against the per-arch ``sha256``.
@@ -22,9 +22,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO = "DanDemolition/SingWS"
-CHANNEL = "2.0"
-MANIFEST_NAME = "release-2.0.json"
+REPO = "DanDemolition/SingWSPro"
+CHANNEL = "pro"
+MANIFEST_NAME = "release.json"
 
 ARCHES = [
     ("mac_arm64", "Apple Silicon Mac (macOS 15+)", "arm64"),

@@ -1158,12 +1158,14 @@ def _is_newer_version(remote: str, current: str) -> bool:
     return _version_key(remote) > _version_key(current)
 
 
-# SingWS 2.0 update channel. 1.x (0.4.7.x) clients read LEGACY_1X_UPDATE_MANIFEST_URL
-# from main; 2.0 reads its own manifest from the `2.0` branch so the two release
-# lines can never offer each other's installers.
-UPDATE_CHANNEL = "2.0"
+# SingWS Pro (2.0) lives in its own GitHub repo, separate from SingWS 1.x
+# (DanDemolition/SingWS), so the two release lines can never offer each other's
+# installers. Settings imported from 1.x carry the legacy values; migrate them.
+UPDATE_CHANNEL = "pro"
+DEFAULT_UPDATE_REPO = "DanDemolition/SingWSPro"
+LEGACY_1X_UPDATE_REPO = "DanDemolition/SingWS"
 LEGACY_1X_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/main/docs/release.json"
-DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/2.0/docs/release-2.0.json"
+DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWSPro/main/docs/release.json"
 
 
 def _effective_update_manifest_url(configured: str) -> str:
@@ -1176,6 +1178,14 @@ def _effective_update_manifest_url(configured: str) -> str:
     value = str(configured or "").strip()
     if not value or value == LEGACY_1X_UPDATE_MANIFEST_URL:
         return DEFAULT_UPDATE_MANIFEST_URL
+    return value
+
+
+def _effective_update_repo(configured: str) -> str:
+    """Return the SingWS Pro repo unless the operator set a different one."""
+    value = str(configured or "").strip().strip("/")
+    if not value or "/" not in value or value == LEGACY_1X_UPDATE_REPO:
+        return DEFAULT_UPDATE_REPO
     return value
 
 
@@ -1205,7 +1215,7 @@ class GitHubUpdateWorker(QThread):
 
     def __init__(self, *, repo: str, current_version: str, manifest_url: str = "", download_dir: str = "", download: bool = False):
         super().__init__()
-        self.repo = str(repo or "DanDemolition/SingWS").strip()
+        self.repo = _effective_update_repo(repo)
         self.current_version = str(current_version or "")
         self.manifest_url = str(manifest_url or "").strip()
         self.download_dir = str(download_dir or "")
@@ -1227,7 +1237,7 @@ class GitHubUpdateWorker(QThread):
     def _fetch_latest_release(self) -> dict:
         repo = self.repo.strip().strip("/")
         if "/" not in repo:
-            repo = "DanDemolition/SingWS"
+            repo = DEFAULT_UPDATE_REPO
         url = f"https://api.github.com/repos/{repo}/releases/latest"
         headers = {
             "Accept": "application/vnd.github+json",
@@ -3410,7 +3420,7 @@ DEFAULTS = {
     "auto_update_enabled": True,        # check GitHub Releases in the background at startup
     "auto_update_download": True,       # automatically download a newer DMG after an auto-check
     "auto_update_check_interval_hours": 12, # minimum hours between automatic GitHub checks
-    "auto_update_repo": "DanDemolition/SingWS",
+    "auto_update_repo": DEFAULT_UPDATE_REPO,
     "auto_update_manifest_url": DEFAULT_UPDATE_MANIFEST_URL,
     "auto_update_download_dir": "",     # blank = ~/Downloads/SingWS Pro Updates
     "auto_update_last_check": 0,
@@ -27227,9 +27237,7 @@ class KaraokeApp(QWidget):
                 return
         except Exception:
             pass
-        repo = str(self.settings.get("auto_update_repo", "DanDemolition/SingWS") or "DanDemolition/SingWS").strip()
-        if not repo:
-            repo = "DanDemolition/SingWS"
+        repo = _effective_update_repo(self.settings.get("auto_update_repo", ""))
         self._github_update_manual = bool(manual)
         self._github_update_download_requested = bool(download)
         self._set_update_status_text("Checking GitHub for updates...")
@@ -27322,9 +27330,7 @@ class KaraokeApp(QWidget):
                 pass
 
     def _open_github_releases_page(self):
-        repo = str(self.settings.get("auto_update_repo", "DanDemolition/SingWS") or "DanDemolition/SingWS").strip().strip("/")
-        if "/" not in repo:
-            repo = "DanDemolition/SingWS"
+        repo = _effective_update_repo(self.settings.get("auto_update_repo", ""))
         QDesktopServices.openUrl(QUrl(f"https://github.com/{repo}/releases"))
 
     def configure_settings(self):
@@ -27865,7 +27871,7 @@ class KaraokeApp(QWidget):
 
         update_repo_row = QHBoxLayout()
         update_repo_row.addWidget(QLabel("GitHub repo:"))
-        update_repo_edit = QLineEdit(str(self.settings.get("auto_update_repo", "DanDemolition/SingWS") or "DanDemolition/SingWS"))
+        update_repo_edit = QLineEdit(_effective_update_repo(self.settings.get("auto_update_repo", "")))
         update_repo_edit.setPlaceholderText("owner/repo")
         update_repo_row.addWidget(update_repo_edit, 1)
         v.addLayout(update_repo_row)
@@ -28534,7 +28540,7 @@ class KaraokeApp(QWidget):
 
         def on_update_repo_changed(text: str):
             repo = str(text or "").strip().strip("/")
-            self.settings["auto_update_repo"] = repo or "DanDemolition/SingWS"
+            self.settings["auto_update_repo"] = repo or DEFAULT_UPDATE_REPO
             self.save_settings()
 
         def on_update_manifest_changed(text: str):
@@ -28774,7 +28780,7 @@ class KaraokeApp(QWidget):
             perf_debug_cb.setChecked(True)
             auto_update_cb.setChecked(True)
             auto_update_download_cb.setChecked(True)
-            update_repo_edit.setText("DanDemolition/SingWS")
+            update_repo_edit.setText(DEFAULT_UPDATE_REPO)
             update_manifest_edit.setText(DEFAULT_UPDATE_MANIFEST_URL)
             update_interval_spin.setValue(12)
             update_dir_edit.setText(str(Path.home() / "Downloads" / "SingWS Pro Updates"))

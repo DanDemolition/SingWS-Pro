@@ -91,61 +91,63 @@ class ManifestTests(unittest.TestCase):
 
 
 class UpdateManifestDefaultsTests(unittest.TestCase):
-    CHANNEL_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/2.0/docs/release-2.0.json"
+    CHANNEL_URL = "https://raw.githubusercontent.com/DanDemolition/SingWSPro/main/docs/release.json"
     LEGACY_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/main/docs/release.json"
 
-    def test_2_0_defaults_to_its_own_channel_manifest(self):
-        source = Path("0.2.18.1.py").read_text(encoding="utf-8")
-        self.assertIn(f'DEFAULT_UPDATE_MANIFEST_URL = "{self.CHANNEL_URL}"', source)
-        self.assertIn('"auto_update_manifest_url": DEFAULT_UPDATE_MANIFEST_URL', source)
-        self.assertIn("update_manifest_edit.setText(DEFAULT_UPDATE_MANIFEST_URL)", source)
-        self.assertIn('manifest_url=_effective_update_manifest_url(self.settings.get("auto_update_manifest_url", ""))', source)
-        # The 1.x URL appears only as the legacy constant used for migration.
-        self.assertEqual(source.count(self.LEGACY_URL), 1)
-
-    def test_effective_manifest_url_migrates_1x_default(self):
+    def _channel_ns(self):
         import ast
-        source = Path("0.2.18.1.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = ast.parse(Path("0.2.18.1.py").read_text(encoding="utf-8"))
+        names = {"LEGACY_1X_UPDATE_MANIFEST_URL", "DEFAULT_UPDATE_MANIFEST_URL",
+                 "DEFAULT_UPDATE_REPO", "LEGACY_1X_UPDATE_REPO"}
         keep = [n for n in tree.body if (
-            isinstance(n, ast.Assign) and any(getattr(t, "id", "") in {
-                "LEGACY_1X_UPDATE_MANIFEST_URL", "DEFAULT_UPDATE_MANIFEST_URL"} for t in n.targets)
-        ) or (isinstance(n, ast.FunctionDef) and n.name == "_effective_update_manifest_url")]
+            isinstance(n, ast.Assign) and any(getattr(t, "id", "") in names for t in n.targets)
+        ) or (isinstance(n, ast.FunctionDef) and n.name in {
+            "_effective_update_manifest_url", "_effective_update_repo"})]
         ns = {}
         exec(compile(ast.Module(body=keep, type_ignores=[]), "channel", "exec"), ns)
-        fn = ns["_effective_update_manifest_url"]
-        self.assertEqual(fn(""), self.CHANNEL_URL)
-        self.assertEqual(fn(None), self.CHANNEL_URL)
-        self.assertEqual(fn(self.LEGACY_URL), self.CHANNEL_URL)
-        self.assertEqual(fn("https://example.com/custom.json"), "https://example.com/custom.json")
+        return ns
 
-    def test_manifest_uses_tag_urls_and_channel(self):
+    def test_pro_defaults_to_its_own_repo(self):
+        source = Path("0.2.18.1.py").read_text(encoding="utf-8")
+        self.assertIn(f'DEFAULT_UPDATE_MANIFEST_URL = "{self.CHANNEL_URL}"', source)
+        self.assertIn('DEFAULT_UPDATE_REPO = "DanDemolition/SingWSPro"', source)
+        self.assertIn('"auto_update_manifest_url": DEFAULT_UPDATE_MANIFEST_URL', source)
+        self.assertIn('"auto_update_repo": DEFAULT_UPDATE_REPO', source)
+        self.assertIn('manifest_url=_effective_update_manifest_url(self.settings.get("auto_update_manifest_url", ""))', source)
+        self.assertEqual(source.count(self.LEGACY_URL), 1)
+        self.assertEqual(source.count('"DanDemolition/SingWS"'), 1)
+
+    def test_imported_1x_settings_migrate_to_pro(self):
+        ns = self._channel_ns()
+        url, repo = ns["_effective_update_manifest_url"], ns["_effective_update_repo"]
+        self.assertEqual(url(""), self.CHANNEL_URL)
+        self.assertEqual(url(self.LEGACY_URL), self.CHANNEL_URL)
+        self.assertEqual(url("https://example.com/custom.json"), "https://example.com/custom.json")
+        self.assertEqual(repo(""), "DanDemolition/SingWSPro")
+        self.assertEqual(repo("DanDemolition/SingWS"), "DanDemolition/SingWSPro")
+        self.assertEqual(repo("someone/fork"), "someone/fork")
+
+    def test_manifest_uses_pro_repo_and_tag_urls(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            (d / "SingWS-Pro-2.0.0-arm64-installer.dmg").write_bytes(b"A" * 10)
-            man = wm.build_manifest("2.0.0", d)
-            self.assertEqual(man["channel"], "2.0")
-            url = man["downloads"]["mac_arm64"]["url"]
-            self.assertIn("/releases/download/v2.0.0/", url)
-            self.assertNotIn("latest", url + man["release_url"])
-            self.assertEqual(wm.MANIFEST_NAME, "release-2.0.json")
+            (d / "SingWS-Pro-2.0.0.1-arm64-installer.dmg").write_bytes(b"A" * 10)
+            man = wm.build_manifest("2.0.0.1", d)
+            self.assertEqual(man["channel"], "pro")
+            self.assertEqual(man["repository"], "DanDemolition/SingWSPro")
+            self.assertIn("github.com/DanDemolition/SingWSPro/releases/download/v2.0.0.1/", man["downloads"]["mac_arm64"]["url"])
+            self.assertEqual(wm.MANIFEST_NAME, "release.json")
 
-    def test_placeholder_channel_manifest_offers_nothing(self):
-        man = json.loads(Path("docs/release-2.0.json").read_text(encoding="utf-8"))
-        self.assertEqual(man["channel"], "2.0")
+    def test_placeholder_manifest_offers_nothing(self):
+        man = json.loads(Path("docs/release.json").read_text(encoding="utf-8"))
+        self.assertEqual(man["repository"], "DanDemolition/SingWSPro")
         self.assertEqual(man["downloads"], {})
 
-    def test_release_script_never_touches_1x_channel(self):
+    def test_release_script_only_publishes_to_pro_repo(self):
         source = Path("release.sh").read_text(encoding="utf-8")
-        self.assertIn('"$BRANCH" != "2.0"', source)
-        self.assertIn("--prerelease", source)
-        self.assertIn("--latest=false", source)
-        self.assertNotIn("--latest\n", source)
-        self.assertNotIn("git push origin main", source)
-        self.assertNotIn(" docs/release.json ", source.split("git add", 1)[1].split("git commit", 1)[0])
+        self.assertLess(source.index('*"DanDemolition/SingWSPro"*'), source.index("gh auth status"))
         self.assertIn('"$NEW_VER" != 2.*', source)
-        self.assertLess(source.index('"$BRANCH" != "2.0"'), source.index("gh auth status"))
+        self.assertNotIn("DanDemolition/SingWS/", source)
 
 
 class PackagingSpecTests(unittest.TestCase):

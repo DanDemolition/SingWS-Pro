@@ -6,25 +6,27 @@
 #
 # Steps: run tests -> bump version (APP_VERSION + spec CFBundle) -> build the
 # the native arm64 DMG -> regenerate
-# docs/release-2.0.json with real
-# size+sha256 -> commit + tag, push tag -> draft PRERELEASE, upload + verify
-# the DMGs, publish (never latest) -> push the 2.0 branch. 2.0 clients read
-# docs/release-2.0.json from the 2.0 branch, so that branch is pushed LAST: the
+# docs/release.json with real
+# size+sha256 -> commit + tag, push tag -> draft release, upload + verify
+# the DMGs, publish -> push main. SingWS Pro clients read docs/release.json
+# from main of DanDemolition/SingWSPro, so main is pushed LAST: the
 # manifest must never go live before the installers it points at are downloadable.
 #
 # Plain ./build_all.sh remains a non-publishing test build.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# SingWS 2.0 CHANNEL RULES. 1.x show machines (including Intel Macs on macOS 12)
-# read docs/release.json from main, fall back to GitHub's "latest" release, and
-# download via releases/latest/download. So every 2.0 release must be:
-#   * published from the `2.0` branch, which is pushed instead of main;
-#   * a GitHub PRERELEASE and never marked latest;
-#   * advertised only in docs/release-2.0.json, with tag-specific URLs.
+# SingWS Pro releases from its own repo (DanDemolition/SingWSPro), never the
+# 1.x repo, so 1.x update checks can never see a Pro installer.
+REPO="DanDemolition/SingWSPro"
+ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+if [[ "$ORIGIN_URL" != *"DanDemolition/SingWSPro"* ]]; then
+  echo "!! origin must be $REPO (found: ${ORIGIN_URL:-none}). Refusing to publish."
+  exit 1
+fi
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [[ "$BRANCH" != "2.0" ]]; then
-  echo "!! SingWS 2.0 releases must run from the 2.0 branch (on: $BRANCH)."
+if [[ "$BRANCH" != "main" ]]; then
+  echo "!! SingWS Pro releases run from main (on: $BRANCH)."
   exit 1
 fi
 # See build_all.sh: fall back to ~/.singws-python314 when the system Python 3.14
@@ -104,13 +106,13 @@ DMG_ARM="SingWS-Pro-$NEW_VER-arm64-installer.dmg"
 RELEASE_DMGS=("$DMG_ARM")
 
 # 4) Regenerate the auto-update manifest from the freshly built DMGs.
-echo ">>> [4/7] writing docs/release-2.0.json"
+echo ">>> [4/7] writing docs/release.json"
 $PY tools/write_manifest.py "$NEW_VER"
 
 # 5) Commit the version bump + manifest and tag, but push ONLY the tag.
-#    docs/release-2.0.json must not reach the 2.0 branch until the DMGs are
+#    docs/release.json must not reach main until the DMGs are
 #    actually downloadable, or auto-update clients get offered 404s.
-echo ">>> [5/7] commit + tag (pushing tag only; 2.0 branch is pushed last)"
+echo ">>> [5/7] commit + tag (pushing tag only; main is pushed last)"
 git add \
   .gitignore .gitmodules \
   vendor/pybind11 vendor/signalsmith-linear vendor/signalsmith-stretch \
@@ -126,7 +128,7 @@ git add \
   tools/verify_macos_min_version.py \
   tools/probe_cdg_render.py tools/run_tests.sh \
   tools/write_manifest.py tools/release_version.py \
-  test_release_tools.py docs/release-2.0.json HANDOFF.md release.sh
+  test_release_tools.py docs/release.json legacy_import.py test_legacy_import.py HANDOFF.md release.sh
 git commit -m "Release $TAG"
 git tag "$TAG"
 git push origin "$TAG"
@@ -134,12 +136,10 @@ git push origin "$TAG"
 # 6) Create the release as a draft, upload the DMGs (retrying flaky uploads),
 #    verify every asset landed at full size, then publish. Until this step
 #    finishes, nothing is public and clients are unaffected.
-echo ">>> [6/7] creating GitHub prerelease $TAG (draft) + uploading DMGs"
+echo ">>> [6/7] creating GitHub release $TAG (draft) + uploading DMGs"
 gh release create "$TAG" \
   --draft \
-  --prerelease \
-  --latest=false \
-  --title "SingWS $NEW_VER" \
+  --title "SingWS Pro $NEW_VER" \
   --notes "Automated release $TAG."
 
 for d in "${RELEASE_DMGS[@]}"; do
@@ -151,11 +151,11 @@ for d in "${RELEASE_DMGS[@]}"; do
   done
   if [ -z "$uploaded" ]; then
     echo "!! could not upload $d after 3 attempts."
-    echo "   The release is still an UNPUBLISHED DRAFT and the 2.0 branch was not pushed, so"
+    echo "   The release is still an UNPUBLISHED DRAFT and main was not pushed, so"
     echo "   auto-update clients are unaffected. To finish by hand:"
     echo "     gh release upload $TAG ${RELEASE_DMGS[*]} --clobber"
-    echo "     gh release edit $TAG --draft=false --prerelease --latest=false"
-    echo "     git push origin 2.0"
+    echo "     gh release edit $TAG --draft=false --latest"
+    echo "     git push origin main"
     exit 1
   fi
 done
@@ -166,31 +166,31 @@ for d in "${RELEASE_DMGS[@]}"; do
   if [ "$local_size" != "$remote_size" ]; then
     echo "!! uploaded asset $d is ${remote_size:-missing} bytes, expected $local_size."
     echo "   Re-upload it (gh release upload $TAG $d --clobber), then publish and"
-    echo "   push the 2.0 branch as printed above. The draft release is not public yet."
+    echo "   push main as printed above. The draft release is not public yet."
     exit 1
   fi
 done
 
-gh release edit "$TAG" --draft=false --prerelease --latest=false
+gh release edit "$TAG" --draft=false --latest
 
-# 7) Only now go live: push the 2.0 branch so 2.0 clients see the new manifest, and
+# 7) Only now go live: push main so SingWS Pro clients see the new manifest, and
 #    confirm an advertised download URL actually resolves.
-echo ">>> [7/7] pushing 2.0 branch (manifest goes live)"
-git push origin 2.0 || {
-  echo "!! push to 2.0 failed. The release IS published, but clients still see"
-  echo "   the previous manifest. Fix and re-run: git push origin 2.0"
+echo ">>> [7/7] pushing main (manifest goes live)"
+git push origin main || {
+  echo "!! push to main failed. The release IS published, but clients still see"
+  echo "   the previous manifest. Fix and re-run: git push origin main"
   exit 1
 }
 
 http_code="$(curl -sIL -o /dev/null -w '%{http_code}' \
-  "https://github.com/DanDemolition/SingWS/releases/download/$TAG/$DMG_ARM")"
+  "https://github.com/$REPO/releases/download/$TAG/$DMG_ARM")"
 if [ "$http_code" != "200" ]; then
   echo "!! warning: download check for $DMG_ARM returned HTTP $http_code —"
   echo "   verify the release assets manually before trusting auto-update."
 fi
 
 echo "========================================"
-echo " RELEASED SingWS $NEW_VER"
-echo "   https://github.com/DanDemolition/SingWS/releases/tag/$TAG"
-echo "   2.0 clients see it via docs/release-2.0.json on the 2.0 branch (prerelease, not latest)."
+echo " RELEASED SingWS Pro $NEW_VER"
+echo "   https://github.com/$REPO/releases/tag/$TAG"
+echo "   SingWS Pro clients see it via docs/release.json on main."
 echo "========================================"

@@ -93,7 +93,7 @@ beta to a 0.4.7.x show machine. Small, entirely non-functional, de-risks the
 rest.
 
 
-**Added 2026-09-15:** SingWS Pro branding — Pro app icon, DMG background and helper art reading "Drag SingWS Pro". Separate identity (`SingWS Pro.app`, `com.singws.pro`, `~/SingWSPro`) and update channel are done; see `docs/intelligent_audio/HANDOFF.md`.
+**Added 2026-09-15:** SingWS Pro branding — Pro app icon, DMG background and helper art reading "Drag SingWS Pro". Separate identity (`SingWS Pro.app`, `com.singws.pro`, `~/SingWSPro`) and own repo `DanDemolition/SingWSPro` are done; see `docs/intelligent_audio/HANDOFF.md`.
 
 ### M1 — Key detection into the analysis pipeline
 Add musical key + confidence to the existing per-track analysis, alongside BPM
