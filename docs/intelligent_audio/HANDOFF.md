@@ -93,10 +93,23 @@ Passive only: no transition decision, timer, fade or playback timing changed.
 - Rollback: turn the setting off (no events); full revert = remove `transition_events.py`, its import, `_ia_record` and the listed call sites.
 - Still needs real hardware/shows: confirm no measurable GUI-tick cost with logging on; review a real show's JSONL.
 
+## Done — Prompt 3 / Phase 1 deterministic cue candidates (2026-09-15)
+
+Most of Phase 1 already existed in `transition_analysis.py` (versioned `TransitionAnalysis` records keyed by path+mtime+size, audio edges from the scan envelope, fade estimate, CDG/MP4 visual end, isolated helper, JSONL checkpoints). This session added the missing cue layer **without touching that cache or its version**.
+
+- New pure `transition_cues.py`: `derive_cues(record) -> TrackCues` (`CUE_ANALYZER_VERSION = 1`) with audible start/end, final lyric (CDG/MP4 visual end) + confidence, **safe BGM entry**, **safe early end**, outro class, per-cue confidence, reason codes, analyzer + analysis versions, computed_at.
+- **Lazy upgrade by design:** cues are recomputed from whatever record exists, so improving the cue policy never marks `transition-analysis.json` stale or forces a rescan. (Bumping `TRANSITION_ANALYSIS_VERSION` would invalidate every record and silently disable existing early-tail behavior. Don't do it for cue changes.)
+- Policy (constants in the module): lyrics outrank silence (silence alone never proposes early end); early end = max(audio_end, final_lyric) + 0.5 s, only with visual confidence ≥ 0.85, track ≥ 20 s, and ≥ 1 s saved; karaoke BGM entry only after a verified audio end with ≥ 1 s dead tail; BGM tracks enter at audible start.
+- Diagnostics only: `python tools/inspect_transition_cues.py [--match TEXT] [--json]` reads `~/SingWSPro/transition-analysis.json` read-only. Nothing in the app calls `derive_cues`; no playback change, no UI.
+- Performance: 130,000 records derived in 0.69 s (Linux VM, pure Python). No I/O per record.
+- Tests: `test_transition_cues.py` (12): normal ending, lyrics after instrumental, silence-only, low confidence, no gain, very short, absent audio, corrupt/old metadata, BGM, purity, no playback/Qt imports, CLI reads without writing. Pass in Linux VM; macOS run pending.
+- Not done / gaps: karaoke envelopes are not persisted (`to_dict` drops them for size), so no stored start/end energy snippets; `cdg_lyrics_finished()` on the transport is still unimplemented and intentionally left alone (implementing it would activate the existing lyric floor in live early-trim = behavior change; do it in Phase 3 behind its gate); schema/database migrations were not needed.
+- Rollback: delete `transition_cues.py`, its test and the tool. No data or app code depends on them.
+
 ## Added scope
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.
 
 ## Next task
 
-Run `test_transition_events.py` plus the full suite on macOS; then Prompt 3 (Phase 1 deterministic analysis — much already exists in `transition_analysis.py`). Do not begin Phase 1 until Phase 0 is verified on macOS.
+Run `test_transition_cues.py` on macOS and `tools/inspect_transition_cues.py` against the real library cache (after importing 1.x data); then Prompt 4 (Phase 2 observer mode + replay harness).
