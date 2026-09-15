@@ -123,7 +123,8 @@ except ImportError:
 
 import hashlib
 import contextlib
-import song_index  # local module (~/SingWS/singws.db)
+import song_index  # local module (~/SingWSPro/singws.db)
+import transition_events  # Phase 0 Intelligent Audio instrumentation (passive)
 import phrase_markers  # local module (~/SingWS/phrase_markers.db) — Phrase-Aligned Song Start
 import phrase_detect  # local module — tempo/beat analysis + beat-aligned loops
 import transition_analysis  # pure, fail-closed audio/visual transition metadata
@@ -3077,6 +3078,8 @@ def _perf_log_if_slow(name: str, ms: float):
     try:
         _perf_record(name, ms)
         if float(ms) >= _perf_threshold_ms(name):
+            if name == "ui_update_time_left":
+                transition_events.record("gui_stall", name=str(name), ms=float(ms))
             now = time.monotonic()
             key = str(name)
             last = float(_PERF_LAST_PRINT.get(key, 0.0) or 0.0)
@@ -3502,6 +3505,7 @@ DEFAULTS = {
     "empty_rotation_slot_timeout_sec": 180, # keep a singer's place briefly while replacing a removed song
     "intro_loop_enabled": False,            # between songs: loop the next song's intro (instead of BGM)
     "intro_loop_bars": 8,                   # bars to loop: 4 / 8 / 16
+    "ia_instrumentation_enabled": False,  # Phase 0: passive transition event log (logs/transition_events_*.jsonl)
     "seamless_transitions_enabled": True,  # master safety switch; OFF preserves normal physical EOS behavior
     "karaoke_bgm_crossfade_enabled": False, # allow intentional karaoke -> BGM overlap at song end
     "karaoke_trim_verified_tail": True,    # end promptly once the file scan confirms all audio has ended
@@ -5512,6 +5516,11 @@ class BackgroundMusicPlayer(QObject):
         if not self.enabled:
             print("BG disabled; fade_in ignored")
             return
+        transition_events.record(
+            "bgm_fade_in",
+            fade_ms=int(duration_ms or 0),
+            during_karaoke=bool(self._karaoke_is_active()),
+        )
     
         # If no target volume specified, use manager slider if open; else saved setting
         if target_volume is None:
@@ -20170,6 +20179,14 @@ class KaraokeApp(QWidget):
         if changed:
             try: self.save_settings()
             except Exception: pass
+        self._ia_karaoke_generation = 0
+        try:
+            transition_events.recorder().configure(
+                enabled=bool(self.settings.get("ia_instrumentation_enabled", False)),
+                log_dir=LOGS_DIR,
+            )
+        except Exception:
+            pass
         try:
             _install_main_thread_watchdog(self)
         except Exception:
@@ -23841,9 +23858,27 @@ class KaraokeApp(QWidget):
         except Exception:
             pass
 
+    def _ia_record(self, kind: str, playhead_s=None, **data):
+        """Passive Phase 0 event. O(1), never raises, no-op when disabled."""
+        rec = transition_events.recorder()
+        if not rec.enabled:
+            return
+        try:
+            rec.record(
+                kind,
+                generation=int(getattr(self, "_ia_karaoke_generation", 0) or 0),
+                track=transition_events.track_id(getattr(self, "_current_karaoke_audio_path", "")),
+                media=getattr(self, "_ia_media", None),
+                playhead_s=playhead_s,
+                **data,
+            )
+        except Exception:
+            pass
+
     def _on_karaoke_ended(self):
         if getattr(self, "karaoke_transport", None) is None:
             return
+        self._ia_record("karaoke_eos")
         _diag("[PY-KARAOKE] decoder reached end of stream")
         QTimer.singleShot(0, self._handle_media_end_safe)
 
@@ -24258,6 +24293,21 @@ class KaraokeApp(QWidget):
                 pass
             raise
         self._last_karaoke_engine = "mpv"
+        # Phase 0 instrumentation: outside the start try-block so nothing here can
+        # ever tear down a transport that started successfully.
+        try:
+            self._ia_karaoke_generation = int(getattr(self, "_ia_karaoke_generation", 0) or 0) + 1
+            self._ia_media = str(mode or "") or None
+            self._ia_record(
+                "karaoke_start",
+                playhead_s=float(start_seconds or 0.0),
+                mode=str(mode or ""),
+                duration_s=float(duration_seconds) if duration_seconds else None,
+                looped=bool(loop_seconds),
+                has_video=bool(video_path),
+            )
+        except Exception:
+            pass
         # mpv owns the audio here, so the SingWS chain runs as mpv `af` filters
         # rather than in the Python sample path. Pushed after start() so the
         # engine has a stream to attach the filters to.
@@ -25641,6 +25691,10 @@ class KaraokeApp(QWidget):
     def _on_app_about_to_quit(self):
         self._app_closing = True
         try:
+            transition_events.recorder().close()
+        except Exception:
+            pass
+        try:
             global _QT_APP_SHUTTING_DOWN
             _QT_APP_SHUTTING_DOWN = True
         except Exception:
@@ -25981,6 +26035,7 @@ class KaraokeApp(QWidget):
             return False
         try:
             transport.seek(seconds)
+            self._ia_record("manual_seek", playhead_s=float(seconds))
             return True
         except Exception as e:
             _diag(f"[PY-KARAOKE] seek failed: {e}")
@@ -26146,6 +26201,14 @@ class KaraokeApp(QWidget):
             _diag("[INTRO-LOOP] media-end → auto-advance into next song's intro loop")
         if early_end_reason:
             _diag(f"[END] early-end handoff reason={early_end_reason} auto_advance={early_auto_advance}")
+        self._ia_record(
+            "media_end",
+            trigger=trigger,
+            early_end_reason=early_end_reason or None,
+            end_silence_triggered=end_silence_triggered,
+            auto_advance=bool(early_auto_advance),
+            crossfade_enabled=bool(self._karaoke_bgm_crossfade_enabled()),
+        )
 
         # True end-overlap path: start BG fade immediately, then teardown karaoke shortly after.
         can_overlap = (
@@ -28040,6 +28103,15 @@ class KaraokeApp(QWidget):
         karaoke_bgm_crossfade_cb.setEnabled(seamless_transitions_cb.isChecked())
         v.addWidget(karaoke_bgm_crossfade_cb)
 
+        ia_instrumentation_cb = QCheckBox("Record transition diagnostics")
+        ia_instrumentation_cb.setToolTip(
+            "Log what happens at each song ending and background-music change to "
+            "logs/transition_events_*.jsonl. Observation only; playback is not changed. "
+            "No audio or singer names are recorded."
+        )
+        ia_instrumentation_cb.setChecked(bool(self.settings.get("ia_instrumentation_enabled", False)))
+        v.addWidget(ia_instrumentation_cb)
+
         end_silence_cb = QCheckBox("Skip verified silence at the end of karaoke songs")
         end_silence_cb.setToolTip("Ends after the scanned final audible audio, without waiting for silent credits or a final graphics card. Unscanned songs play to their normal end.")
         end_silence_cb.setChecked(bool(self.settings.get("karaoke_trim_verified_tail", True)))
@@ -28622,6 +28694,14 @@ class KaraokeApp(QWidget):
                 _diag("[TRANSITION] seamless intelligence enabled for future transitions")
             self.save_settings()
 
+        def on_ia_instrumentation_toggled(checked: bool):
+            self.settings["ia_instrumentation_enabled"] = bool(checked)
+            try:
+                transition_events.recorder().configure(enabled=bool(checked), log_dir=LOGS_DIR)
+            except Exception:
+                pass
+            self._schedule_save_settings()
+
         def on_karaoke_bgm_crossfade_toggled(checked: bool):
             self.settings["karaoke_bgm_crossfade_enabled"] = bool(checked)
             self.save_settings()
@@ -28887,6 +28967,7 @@ class KaraokeApp(QWidget):
         bg_gap_spin.valueChanged.connect(on_bg_gap_changed)
         seamless_transitions_cb.toggled.connect(on_seamless_transitions_toggled)
         karaoke_bgm_crossfade_cb.toggled.connect(on_karaoke_bgm_crossfade_toggled)
+        ia_instrumentation_cb.toggled.connect(on_ia_instrumentation_toggled)
         end_silence_cb.toggled.connect(on_end_silence_toggled)
         auto_advance_cb.toggled.connect(on_auto_advance_toggled)
         end_threshold_spin.valueChanged.connect(on_end_threshold_changed)
@@ -38416,6 +38497,7 @@ class KaraokeApp(QWidget):
                 "[CROSSFADE] BG fade started at verified audio end; "
                 "karaoke visuals retained until their safe endpoint"
             )
+            self._ia_record("bgm_prefire_verified", fade_ms=3000)
             return True
         except Exception as exc:
             self._bg_crossfade_prefired = False
@@ -38521,6 +38603,8 @@ class KaraokeApp(QWidget):
             self._end_silence_auto_advance_next = bool(self.settings.get("karaoke_auto_advance", False))
             _diag(f"[END-SILENCE] skipping scanned silent tail at {elapsed:.2f}s "
                   f"audio_end={float(audio_end):.2f}s remaining={remain:.2f}s")
+            self._ia_record("early_end_trim", playhead_s=elapsed, reason="verified_audio_tail",
+                            audio_end_s=float(audio_end), remain_s=remain)
             QTimer.singleShot(0, lambda: self._handle_media_end_safe("verified_silent_tail"))
             return True
 
@@ -38660,6 +38744,9 @@ class KaraokeApp(QWidget):
                 f"(db={'n/a' if meterless else f'{db:.1f}'}, silent={self._end_silence_accum_s:.2f}s, "
                 f"remain={remain:.2f}s, cdg_done={cdg_done}, cdg_stale={cdg_stale_for:.2f}s)"
             )
+            self._ia_record("early_end_trim", playhead_s=elapsed, reason=str(reason),
+                            remain_s=remain, meterless=bool(meterless),
+                            cdg_done=bool(cdg_done), cdg_stale_s=float(cdg_stale_for or 0.0))
             QTimer.singleShot(
                 0,
                 lambda: self._handle_media_end_safe("verified_silent_tail"),
@@ -38700,6 +38787,8 @@ class KaraokeApp(QWidget):
                     self._bg_resume_reason = "karaoke_end_overlap"
                     self.bg_music.fade_in(None, 3000, allow_during_karaoke=True)
                     _diag("[CROSSFADE] BG pre-start fired (3s remaining)")
+                    self._ia_record("bgm_prestart", playhead_s=pos / NS_PER_SECOND,
+                                    remain_s=time_remaining_ns / NS_PER_SECOND, fade_ms=3000)
                 except Exception as e:
                     _diag(f"[CROSSFADE] BG pre-start failed: {e}")
 
@@ -38747,6 +38836,8 @@ class KaraokeApp(QWidget):
                 self._eos_guard += 1
                 if self._eos_guard >= 2:
                     self._eos_guard = 0
+                    self._ia_record("eos_fallback", playhead_s=pos / NS_PER_SECOND,
+                                    remain_s=(dur - pos) / NS_PER_SECOND)
                     QTimer.singleShot(0, self._handle_media_end_safe)
                     return
             else:
@@ -38795,6 +38886,7 @@ class KaraokeApp(QWidget):
                 self._stalled_pos_ticks = 0
                 self._eos_guard = 0
                 _diag("[TIME] Position stalled ~10s with silence; forcing end-safe handler")
+                self._ia_record("stall_fallback", playhead_s=pos / NS_PER_SECOND)
                 QTimer.singleShot(0, self._handle_media_end_safe)
         else:
             self._update_karaoke_seek_ui(0.0, 0.0)
@@ -53606,6 +53698,7 @@ class KaraokeApp(QWidget):
             QTimer.singleShot(0, _commit_pending_start)
 
     def stop_playback(self, skip_confirmation=False):
+        self._ia_record("manual_stop", karaoke_playing=bool(getattr(self, "karaoke_playing", False)))
         # A song stopped before it ended was never performed, so it must not be
         # recorded as sung -- otherwise the singer cannot re-add it. On a real
         # media end _finish_media_end_cleanup has already committed it, so this

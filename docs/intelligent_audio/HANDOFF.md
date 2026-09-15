@@ -69,10 +69,33 @@ Linux VM, Python 3.10: `test_transition_analysis`, `test_analysis_helper_transpo
   - `test_rotation_tv_design`: 0.4.7.7-rc1 changed the karaoke-time backdrop check to 1000 ms; test still expected 250. Test updated.
   - `test_karafun_fullscreen`: patched `threading.Thread` globally, which broke `threading.Timer` in the (newer) delayed re-verify path. Now fakes both; failing test updated for the one re-check, plus a new test for a re-check that succeeds. 6 pass in Linux VM.
 
+## Done — Prompt 2 / Phase 0 transition instrumentation (2026-09-15)
+
+Passive only: no transition decision, timer, fade or playback timing changed.
+
+- New `transition_events.py`: `PlaybackEvent` (schema v1), `EventRecorder` with a bounded ring (2048 events), one daemon writer thread flushing about every second to `~/SingWSPro/logs/transition_events_YYYYMMDD.jsonl`. **Overflow policy:** keep newest, drop oldest, write a `recorder_dropped` event with the count. `record()` does no I/O or JSON work; unknown kinds rejected; non-scalar data dropped; tracks are a 12-char SHA-1 of the path (no singer names, no audio).
+- Setting `ia_instrumentation_enabled` (default **off**); checkbox "Record transition diagnostics" under Seamless transitions; applies immediately.
+- `KaraokeApp._ia_record()` adds generation (increments per karaoke start), track id, media mode. Call sites in `0.2.18.1.py`:
+  - `karaoke_start` — end of `_start_mpv_karaoke_transport`, **outside** the start try-block
+  - `karaoke_eos` — `_on_karaoke_ended`
+  - `media_end` — `_handle_media_end_safe` (trigger, early_end_reason, auto_advance, crossfade_enabled)
+  - `early_end_trim` — both verified-tail exits in `_maybe_trim_end_silence`
+  - `bgm_prestart`, `eos_fallback`, `stall_fallback` — `update_time_left`
+  - `bgm_prefire_verified` — `_prefire_bgm_at_verified_audio_end`
+  - `bgm_fade_in` — `BackgroundMusicPlayer.fade_in` (after its guards)
+  - `manual_stop` — `stop_playback`; `manual_seek` — `_karaoke_seek_seconds`
+  - `gui_stall` — `_perf_log_if_slow("ui_update_time_left")` over threshold
+  - recorder closed in `_on_app_about_to_quit`
+- Not captured yet (not available without new code): final CDG lyric timestamp (`cdg_lyrics_finished()` still missing), BASS/mpv underrun counters, actual audible BGM start time.
+- `transition_events.py` added to the spec helper list.
+- Tests: new `test_transition_events.py` (13): disabled no-op, no I/O on the caller thread, ordering/schema/filtering, overflow, close/flush, write failure, concurrent producers, and static contracts (default off, helper only touches the recorder and swallows errors, every call is a bare statement so results can't drive decisions, shutdown closes). Pass in Linux VM; **macOS run pending**.
+- Rollback: turn the setting off (no events); full revert = remove `transition_events.py`, its import, `_ia_record` and the listed call sites.
+- Still needs real hardware/shows: confirm no measurable GUI-tick cost with logging on; review a real show's JSONL.
+
 ## Added scope
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.
 
 ## Next task
 
-Run the full macOS test suite (see AGENTS.md) to record a real baseline, then design the 2.0 update channel, then Prompt 2 (Phase 0 instrumentation).
+Run `test_transition_events.py` plus the full suite on macOS; then Prompt 3 (Phase 1 deterministic analysis — much already exists in `transition_analysis.py`). Do not begin Phase 1 until Phase 0 is verified on macOS.

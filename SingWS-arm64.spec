@@ -31,6 +31,7 @@ for helper in (
     "singws_master_audio.py",
     "mac_keep_awake.py",
     "legacy_import.py",
+    "transition_events.py",
 ):
     helper_path = project_root / helper
     if helper_path.exists():
