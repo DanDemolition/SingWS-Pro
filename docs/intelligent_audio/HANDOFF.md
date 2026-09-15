@@ -75,7 +75,7 @@ Passive only: no transition decision, timer, fade or playback timing changed.
 
 - New `transition_events.py`: `PlaybackEvent` (schema v1), `EventRecorder` with a bounded ring (2048 events), one daemon writer thread flushing about every second to `~/SingWSPro/logs/transition_events_YYYYMMDD.jsonl`. **Overflow policy:** keep newest, drop oldest, write a `recorder_dropped` event with the count. `record()` does no I/O or JSON work; unknown kinds rejected; non-scalar data dropped; tracks are a 12-char SHA-1 of the path (no singer names, no audio).
 - Setting `ia_instrumentation_enabled` (default **off**); checkbox "Record transition diagnostics" under Seamless transitions; applies immediately.
-- `KaraokeApp._ia_record()` adds generation (increments per karaoke start), track id, media mode. Call sites in `0.2.18.1.py`:
+- Module-level `_ia_record(owner, ...)` (not a method, so lightweight test hosts never break) adds generation (increments per karaoke start), track id, media mode. Call sites in `0.2.18.1.py`:
   - `karaoke_start` — end of `_start_mpv_karaoke_transport`, **outside** the start try-block
   - `karaoke_eos` — `_on_karaoke_ended`
   - `media_end` — `_handle_media_end_safe` (trigger, early_end_reason, auto_advance, crossfade_enabled)
@@ -88,7 +88,8 @@ Passive only: no transition decision, timer, fade or playback timing changed.
   - recorder closed in `_on_app_about_to_quit`
 - Not captured yet (not available without new code): final CDG lyric timestamp (`cdg_lyrics_finished()` still missing), BASS/mpv underrun counters, actual audible BGM start time.
 - `transition_events.py` added to the spec helper list.
-- Tests: new `test_transition_events.py` (13): disabled no-op, no I/O on the caller thread, ordering/schema/filtering, overflow, close/flush, write failure, concurrent producers, and static contracts (default off, helper only touches the recorder and swallows errors, every call is a bare statement so results can't drive decisions, shutdown closes). Pass in Linux VM; **macOS run pending**.
+- macOS run 2026-09-15: 1052 passed; only new failure was `test_performance_safety::test_scanned_tail_ends_promptly_without_waiting_for_graphics` (SimpleNamespace host had no `_ia_record` method) → helper moved to module level. Singer-history failures are environment.
+- Tests: new `test_transition_events.py` (14): disabled no-op, no I/O on the caller thread, ordering/schema/filtering, overflow, close/flush, write failure, concurrent producers, and static contracts (default off, helper only touches the recorder and swallows errors, every call is a bare statement so results can't drive decisions, shutdown closes). Pass in Linux VM; **macOS run pending**.
 - Rollback: turn the setting off (no events); full revert = remove `transition_events.py`, its import, `_ia_record` and the listed call sites.
 - Still needs real hardware/shows: confirm no measurable GUI-tick cost with logging on; review a real show's JSONL.
 

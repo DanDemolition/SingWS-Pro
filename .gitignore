@@ -55,3 +55,7 @@ native_dual_view/
 native/mpv_bridge/libsingws_mpv_bridge.dylib
 qtvenv/
 test-baseline*.log
+
+# Private server repo, checked out locally for app/server integration tests only.
+# Never commit it into this public repo.
+/SingWS-Server/

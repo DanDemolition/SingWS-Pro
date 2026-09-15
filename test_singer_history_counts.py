@@ -29,6 +29,13 @@ class SingerHistoryCountTests(unittest.TestCase):
             self.skipTest("PHP with SQLite3 is required for the app/server integration test")
         # The app and server now share one consolidated SingWS workspace.
         server = Path(__file__).resolve().parent / "SingWS-Server"
+        if not (server / "api" / "v1" / "singer_history_sync.php").is_file():
+            # SingWS-Server is a private repo; it is checked out locally (and
+            # gitignored) only on machines that run the app/server tests.
+            self.skipTest("SingWS-Server checkout not present at ./SingWS-Server")
+        if not (server / "config.inc").is_file():
+            self.skipTest("SingWS-Server/config.inc missing; for local tests: "
+                          "cp SingWS-Server/config.inc.example SingWS-Server/config.inc")
         # No endpoint/auth/tenant setup: require helper definitions, and operate
         # exclusively on a new SQLite file under TemporaryDirectory.
         code = r'''

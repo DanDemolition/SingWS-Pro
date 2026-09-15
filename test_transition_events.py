@@ -125,6 +125,7 @@ class AppIntegrationContractTests(unittest.TestCase):
     def test_helper_only_talks_to_recorder_and_swallows_errors(self):
         helper = self._method("_ia_record")
         calls = {ast.unparse(c.func) for c in ast.walk(helper) if isinstance(c, ast.Call)}
+        self.assertIsInstance(helper.body[1], ast.Try)  # everything after the docstring is guarded
         allowed = {"transition_events.recorder", "rec.record", "transition_events.track_id",
                    "int", "getattr"}
         self.assertTrue(calls <= allowed, calls - allowed)
@@ -134,7 +135,7 @@ class AppIntegrationContractTests(unittest.TestCase):
         # A recorder result must never feed a condition or assignment.
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Call) and ast.unparse(node.func) in (
-                    "self._ia_record", "transition_events.record"):
+                    "_ia_record", "transition_events.record"):
                 parent_ok = False
                 for stmt in ast.walk(self.tree):
                     if isinstance(stmt, ast.Expr) and stmt.value is node:
@@ -149,6 +150,11 @@ class AppIntegrationContractTests(unittest.TestCase):
                      "manual_seek", "gui_stall"):
             self.assertIn(f'"{kind}"', self.source, kind)
             self.assertIn(kind, te.EVENT_KINDS)
+
+    def test_helper_is_module_level_so_any_host_object_works(self):
+        top = {n.name for n in self.tree.body if isinstance(n, ast.FunctionDef)}
+        self.assertIn("_ia_record", top)
+        self.assertNotIn("self._ia_record(", self.source)
 
     def test_shutdown_closes_recorder(self):
         body = ast.unparse(self._method("_on_app_about_to_quit"))

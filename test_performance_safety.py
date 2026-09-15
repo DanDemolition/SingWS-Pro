@@ -1327,7 +1327,8 @@ class PerformanceSafetyTests(unittest.TestCase):
     def test_scanned_tail_ends_promptly_without_waiting_for_graphics(self):
         timer = mock.Mock()
         namespace = {"time": __import__("time"), "NS_PER_SECOND": 1_000_000_000,
-                     "QTimer": timer, "_diag": lambda *args: None}
+                     "QTimer": timer, "_diag": lambda *args: None,
+                     "_ia_record": lambda *args, **kwargs: None}  # Phase 0 passive instrumentation
         exec(textwrap.dedent(function_source("_maybe_trim_end_silence")), namespace)
         trim = namespace["_maybe_trim_end_silence"]
         host = types.SimpleNamespace(
