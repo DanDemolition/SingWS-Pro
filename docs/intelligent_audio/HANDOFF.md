@@ -59,6 +59,16 @@ Linux VM, Python 3.10: `test_transition_analysis`, `test_analysis_helper_transpo
 - To do (operator wants it): **SingWS Pro branding** — Pro app icon (`SingWS.icns`/iconset), DMG background + helper art (`build_dmg_background.py`, `tools/make_dmg_assets.py`, `design/`) saying "Drag SingWS Pro".
 - Decided: 1.x and Pro may both connect to wskar.com as host; that is acceptable as long as only one is actively hosting a show. No server-side arbitration needed now.
 
+## macOS baseline — 2026-09-15 (Apple Silicon, Python 3.14, fresh `qtvenv`)
+
+`SINGWS_SECONDARY_TEST_PYTHON=./qtvenv/bin/python ./tools/run_tests.sh` → **1035 passed, 11 failed, 7 errors, 34 subtests passed** (84.6 s). Log: `test-baseline.log` (local, not committed). The runner stops after the main pass fails, so the four mpv/PyObjC secondary modules did not run.
+
+- Caused by the SingWS Pro rename — **fixed after the run** (not yet re-run on macOS): `test_recent_regressions::test_widget_surfaces_are_double_buffered_by_default_on_macos` (looked for `setApplicationName("SingWS")`), `test_profile_isolation::test_regular_profile_keeps_original_location` (expected `~/SingWS`).
+- Environment: `test_singer_history_counts` (7 failed + 7 errors) needs the private `SingWS-Server` repo checked out at `./SingWS-Server` plus PHP.
+- Pre-existing test bugs — **fixed after the run** (not yet re-run on macOS):
+  - `test_rotation_tv_design`: 0.4.7.7-rc1 changed the karaoke-time backdrop check to 1000 ms; test still expected 250. Test updated.
+  - `test_karafun_fullscreen`: patched `threading.Thread` globally, which broke `threading.Timer` in the (newer) delayed re-verify path. Now fakes both; failing test updated for the one re-check, plus a new test for a re-check that succeeds. 6 pass in Linux VM.
+
 ## Added scope
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.

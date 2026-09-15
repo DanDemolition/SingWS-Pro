@@ -54,3 +54,4 @@ native_dual_view/
 # Built native bridge; produced by native/mpv_bridge/build_bridge.sh
 native/mpv_bridge/libsingws_mpv_bridge.dylib
 qtvenv/
+test-baseline*.log

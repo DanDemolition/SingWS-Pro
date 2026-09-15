@@ -43,7 +43,9 @@ class RotationTvDesignTests(unittest.TestCase):
         QTest.qWait(20)
         view.set_effects_enabled(True)
         view._tick_animated_backdrop()
-        self.assertEqual(view._backdrop_animation_timer.interval(), 250)
+        # 0.4.7.7-rc1 slowed the karaoke-time state check to 1 s so the optional
+        # backdrop never repaints while lyrics move.
+        self.assertEqual(view._backdrop_animation_timer.interval(), 1000)
         self.assertFalse(view.rotation_rail._root.property('effectsEnabled'))
         self.assertFalse(view.now_singing_surface._root.property('effectsEnabled'))
         owner.karaoke_playing = False

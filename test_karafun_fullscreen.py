@@ -24,15 +24,37 @@ class Host:
 
 
 class InlineThread:
-    def __init__(self, target, **kwargs):
+    def __init__(self, *args, target=None, **kwargs):
         self.target = target
 
     def start(self):
         self.target()
 
 
+class InlineTimer:
+    """Fire the delayed re-verification immediately.
+
+    Patching only threading.Thread broke threading.Timer, whose __init__ calls
+    the (patched) module-level Thread.__init__ -> "Thread.__init__() not called".
+    """
+
+    def __init__(self, _interval, function, args=None, kwargs=None):
+        self.function = function
+        self.args = args or ()
+        self.kwargs = kwargs or {}
+        self.daemon = False
+
+    def start(self):
+        self.function(*self.args, **self.kwargs)
+
+
 class FullscreenTests(unittest.TestCase):
-    @patch("threading.Thread", InlineThread)
+    def setUp(self):
+        for name, fake in (("threading.Thread", InlineThread), ("threading.Timer", InlineTimer)):
+            patcher = patch(name, fake)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_windowed_uses_current_renderer_bounds_once_then_only_verifies(self):
         host = Host(["WINDOWED", "CLICK|-500|400", "FULLSCREEN"])
         results = []
@@ -61,10 +83,19 @@ class FullscreenTests(unittest.TestCase):
         ensure_renderer_fullscreen(host, self.fail, lambda: False)
         self.assertEqual(host.scripts, [])
 
-    @patch("threading.Thread", InlineThread)
     def test_failed_verification_does_not_claim_success_or_click_again(self):
-        host = Host(["WINDOWED", "CLICK|400|300", "WINDOWED"])
+        # A WINDOWED verification is re-checked once after a delay (slow Space
+        # transitions); if it is still WINDOWED, report it without clicking again.
+        host = Host(["WINDOWED", "CLICK|400|300", "WINDOWED", "WINDOWED"])
         results = []
         ensure_renderer_fullscreen(host, results.append, lambda: True)
         self.assertEqual(results, ["WINDOWED"])
+        self.assertEqual(len(host.clicks), 1)
+        self.assertEqual(len(host.scripts), 4)
+
+    def test_slow_fullscreen_transition_succeeds_on_recheck(self):
+        host = Host(["WINDOWED", "CLICK|400|300", "WINDOWED", "FULLSCREEN"])
+        results = []
+        ensure_renderer_fullscreen(host, results.append, lambda: True)
+        self.assertEqual(results, ["FULLSCREEN"])
         self.assertEqual(len(host.clicks), 1)

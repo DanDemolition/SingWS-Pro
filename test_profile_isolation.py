@@ -22,7 +22,8 @@ class ProfilePathTests(unittest.TestCase):
     def test_regular_profile_keeps_original_location(self):
         with tempfile.TemporaryDirectory() as td, mock.patch.object(Path, "home", return_value=Path(td)):
             with mock.patch.dict(os.environ, {"SINGWS_HOME": ""}):
-                self.assertEqual(song_index.db_path(), Path(td) / "SingWS" / "singws.db")
+                # SingWS Pro keeps its own data root beside 1.x (~/SingWS).
+                self.assertEqual(song_index.db_path(), Path(td) / "SingWSPro" / "singws.db")
 
 
 class BackgroundProfileTests(unittest.TestCase):

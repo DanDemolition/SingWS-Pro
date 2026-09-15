@@ -124,7 +124,7 @@ class RecentRegressionTests(unittest.TestCase):
         main = self.singws_source
         self.assertLess(
             main.index("_install_single_buffered_widget_surfaces()\n\n    app = QApplication(["),
-            main.index("app.setApplicationName(\"SingWS\")"),
+            main.index("app.setApplicationName(APP_DISPLAY_NAME)"),
         )
 
     def test_quick_views_keep_double_buffering(self):
