@@ -91,7 +91,7 @@ class ManifestTests(unittest.TestCase):
 
 
 class UpdateManifestDefaultsTests(unittest.TestCase):
-    CHANNEL_URL = "https://raw.githubusercontent.com/DanDemolition/SingWSPro/main/docs/release.json"
+    CHANNEL_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS-Pro/main/docs/release.json"
     LEGACY_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/main/docs/release.json"
 
     def _channel_ns(self):
@@ -110,7 +110,7 @@ class UpdateManifestDefaultsTests(unittest.TestCase):
     def test_pro_defaults_to_its_own_repo(self):
         source = Path("0.2.18.1.py").read_text(encoding="utf-8")
         self.assertIn(f'DEFAULT_UPDATE_MANIFEST_URL = "{self.CHANNEL_URL}"', source)
-        self.assertIn('DEFAULT_UPDATE_REPO = "DanDemolition/SingWSPro"', source)
+        self.assertIn('DEFAULT_UPDATE_REPO = "DanDemolition/SingWS-Pro"', source)
         self.assertIn('"auto_update_manifest_url": DEFAULT_UPDATE_MANIFEST_URL', source)
         self.assertIn('"auto_update_repo": DEFAULT_UPDATE_REPO', source)
         self.assertIn('manifest_url=_effective_update_manifest_url(self.settings.get("auto_update_manifest_url", ""))', source)
@@ -123,8 +123,8 @@ class UpdateManifestDefaultsTests(unittest.TestCase):
         self.assertEqual(url(""), self.CHANNEL_URL)
         self.assertEqual(url(self.LEGACY_URL), self.CHANNEL_URL)
         self.assertEqual(url("https://example.com/custom.json"), "https://example.com/custom.json")
-        self.assertEqual(repo(""), "DanDemolition/SingWSPro")
-        self.assertEqual(repo("DanDemolition/SingWS"), "DanDemolition/SingWSPro")
+        self.assertEqual(repo(""), "DanDemolition/SingWS-Pro")
+        self.assertEqual(repo("DanDemolition/SingWS"), "DanDemolition/SingWS-Pro")
         self.assertEqual(repo("someone/fork"), "someone/fork")
 
     def test_manifest_uses_pro_repo_and_tag_urls(self):
@@ -134,18 +134,18 @@ class UpdateManifestDefaultsTests(unittest.TestCase):
             (d / "SingWS-Pro-2.0.0.1-arm64-installer.dmg").write_bytes(b"A" * 10)
             man = wm.build_manifest("2.0.0.1", d)
             self.assertEqual(man["channel"], "pro")
-            self.assertEqual(man["repository"], "DanDemolition/SingWSPro")
-            self.assertIn("github.com/DanDemolition/SingWSPro/releases/download/v2.0.0.1/", man["downloads"]["mac_arm64"]["url"])
+            self.assertEqual(man["repository"], "DanDemolition/SingWS-Pro")
+            self.assertIn("github.com/DanDemolition/SingWS-Pro/releases/download/v2.0.0.1/", man["downloads"]["mac_arm64"]["url"])
             self.assertEqual(wm.MANIFEST_NAME, "release.json")
 
     def test_placeholder_manifest_offers_nothing(self):
         man = json.loads(Path("docs/release.json").read_text(encoding="utf-8"))
-        self.assertEqual(man["repository"], "DanDemolition/SingWSPro")
+        self.assertEqual(man["repository"], "DanDemolition/SingWS-Pro")
         self.assertEqual(man["downloads"], {})
 
     def test_release_script_only_publishes_to_pro_repo(self):
         source = Path("release.sh").read_text(encoding="utf-8")
-        self.assertLess(source.index('*"DanDemolition/SingWSPro"*'), source.index("gh auth status"))
+        self.assertLess(source.index('*"DanDemolition/SingWS-Pro"*'), source.index("gh auth status"))
         self.assertIn('"$NEW_VER" != 2.*', source)
         self.assertNotIn("DanDemolition/SingWS/", source)
 

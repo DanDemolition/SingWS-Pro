@@ -1162,10 +1162,10 @@ def _is_newer_version(remote: str, current: str) -> bool:
 # (DanDemolition/SingWS), so the two release lines can never offer each other's
 # installers. Settings imported from 1.x carry the legacy values; migrate them.
 UPDATE_CHANNEL = "pro"
-DEFAULT_UPDATE_REPO = "DanDemolition/SingWSPro"
+DEFAULT_UPDATE_REPO = "DanDemolition/SingWS-Pro"
 LEGACY_1X_UPDATE_REPO = "DanDemolition/SingWS"
 LEGACY_1X_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS/main/docs/release.json"
-DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWSPro/main/docs/release.json"
+DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/DanDemolition/SingWS-Pro/main/docs/release.json"
 
 
 def _effective_update_manifest_url(configured: str) -> str:

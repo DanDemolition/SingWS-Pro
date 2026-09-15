@@ -9,18 +9,18 @@
 # docs/release.json with real
 # size+sha256 -> commit + tag, push tag -> draft release, upload + verify
 # the DMGs, publish -> push main. SingWS Pro clients read docs/release.json
-# from main of DanDemolition/SingWSPro, so main is pushed LAST: the
+# from main of DanDemolition/SingWS-Pro, so main is pushed LAST: the
 # manifest must never go live before the installers it points at are downloadable.
 #
 # Plain ./build_all.sh remains a non-publishing test build.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# SingWS Pro releases from its own repo (DanDemolition/SingWSPro), never the
+# SingWS Pro releases from its own repo (DanDemolition/SingWS-Pro), never the
 # 1.x repo, so 1.x update checks can never see a Pro installer.
-REPO="DanDemolition/SingWSPro"
+REPO="DanDemolition/SingWS-Pro"
 ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
-if [[ "$ORIGIN_URL" != *"DanDemolition/SingWSPro"* ]]; then
+if [[ "$ORIGIN_URL" != *"DanDemolition/SingWS-Pro"* ]]; then
   echo "!! origin must be $REPO (found: ${ORIGIN_URL:-none}). Refusing to publish."
   exit 1
 fi

@@ -42,7 +42,7 @@ Linux VM, Python 3.10: `test_transition_analysis`, `test_analysis_helper_transpo
 
 ## Done — SingWS Pro update channel (2026-09-15, revised)
 
-- SingWS Pro has its own **public repo `DanDemolition/SingWSPro`**; 1.x stays in `DanDemolition/SingWS`.
+- SingWS Pro has its own **public repo `DanDemolition/SingWS-Pro`**; 1.x stays in `DanDemolition/SingWS`.
 - App: `DEFAULT_UPDATE_REPO`, `DEFAULT_UPDATE_MANIFEST_URL` (`SingWSPro/main/docs/release.json`); `_effective_update_repo()` / `_effective_update_manifest_url()` migrate 1.x values from imported settings.
 - `docs/release.json` is a Pro placeholder (no downloads). The 1.x download page `docs/index.html` was removed from this tree.
 - `release.sh` refuses unless origin is SingWSPro and branch is `main`; version must be 2.x; normal "latest" releases.

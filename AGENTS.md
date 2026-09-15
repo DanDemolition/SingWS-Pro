@@ -14,7 +14,7 @@ Current engineering direction:
 - Favor Signalsmith Stretch for realtime pitch/time DSP work.
 - Target macOS first unless the task explicitly says otherwise.
 - SingWS 2.0 targets Apple Silicon on macOS 15+ only; Intel and older macOS stay on 1.x.
-- 2.0 ships as **SingWS Pro**: `SingWS Pro.app`, bundle id `com.singws.pro`, data in `~/SingWSPro`, 4-part versions starting 2.0.0.x, own public repo `DanDemolition/SingWSPro` (`main`, `docs/release.json`); never publish to `DanDemolition/SingWS`, which is 1.x. Never read or write `~/SingWS` except the one-time read-only import in `legacy_import.py`.
+- 2.0 ships as **SingWS Pro**: `SingWS Pro.app`, bundle id `com.singws.pro`, data in `~/SingWSPro`, 4-part versions starting 2.0.0.x, own public repo `DanDemolition/SingWS-Pro` (`main`, `docs/release.json`); never publish to `DanDemolition/SingWS`, which is 1.x. Never read or write `~/SingWS` except the one-time read-only import in `legacy_import.py`.
 - Intelligent Audio / vocal effects: the current plan is `docs/intelligent_audio/ROADMAP.md`. The copy in `SingWS_Intelligent_Audio_Package for SingWS 2.0/` is the original reference version (includes superseded Intel requirements) — do not follow it.
 
 ---

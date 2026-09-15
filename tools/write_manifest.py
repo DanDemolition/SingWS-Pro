@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate docs/release.json (the SingWS Pro auto-update manifest) from built DMGs.
 
-SingWS Pro has its own repo (DanDemolition/SingWSPro), separate from SingWS 1.x.
+SingWS Pro has its own repo (DanDemolition/SingWS-Pro), separate from SingWS 1.x.
 Download URLs point at the exact release tag.
 
 The desktop updater reads this file from GitHub Pages, compares ``version``
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO = "DanDemolition/SingWSPro"
+REPO = "DanDemolition/SingWS-Pro"
 CHANNEL = "pro"
 MANIFEST_NAME = "release.json"
 
