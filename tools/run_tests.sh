@@ -115,8 +115,28 @@ SECONDARY_TESTS=(
     "${SECONDARY_TESTS[@]/#/--ignore=}"
 
 # The clean Qt environment intentionally does not carry the native-only mpv and
-# PyObjC dependencies. Cover those four modules in the build environment after
-# the complete GUI-capable pass succeeds.
-SECONDARY="${SINGWS_SECONDARY_TEST_PYTHON:-$ROOT/.venv-universal/bin/python}"
-[[ -x "$SECONDARY" ]] || { echo "Missing native test environment: $SECONDARY" >&2; exit 1; }
+# PyObjC dependencies. Cover those four modules in a native environment after
+# the complete GUI-capable pass succeeds. Build it with:
+#
+#   python3 -m venv .venv-native
+#   ./.venv-native/bin/pip install -c constraints-macos15.txt PyQt6 mpv \
+#       pyobjc-framework-Cocoa numpy scipy psutil requests qrcode pillow \
+#       mutagen pytest
+#   mkdir -p .venv-native/mpvlib
+#   ln -sfn "$PWD/native_dual_view/Frameworks/singws_libmpv.2.dylib" \
+#       .venv-native/mpvlib/libmpv.dylib
+#
+# The symlink is why DYLD_FALLBACK_LIBRARY_PATH is exported below: the python-mpv
+# package resolves the library through ctypes.util.find_library("mpv"), which
+# cannot see our renamed singws_libmpv.2.dylib. Pointing it at the bundle's own
+# core means these tests exercise the shipped libmpv rather than a Homebrew one.
+SECONDARY="${SINGWS_SECONDARY_TEST_PYTHON:-$ROOT/.venv-native/bin/python}"
+if [[ ! -x "$SECONDARY" ]]; then
+    echo "Missing native test environment: $SECONDARY" >&2
+    echo "Build it with the commands in the comment above this line in $0." >&2
+    exit 1
+fi
+if [[ -z "${DYLD_FALLBACK_LIBRARY_PATH:-}" && -e "$ROOT/.venv-native/mpvlib/libmpv.dylib" ]]; then
+    export DYLD_FALLBACK_LIBRARY_PATH="$ROOT/.venv-native/mpvlib"
+fi
 exec "$SECONDARY" -m pytest -q "${SECONDARY_TESTS[@]}"

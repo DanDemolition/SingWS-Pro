@@ -388,7 +388,31 @@ Earlier revisions of this section said there was no pytest; that is wrong, and
 
     python3 -m venv qtvenv
     ./qtvenv/bin/pip install -c constraints-macos15.txt PyQt6 psutil requests \
-        numpy qrcode pillow scipy pytest
+        numpy qrcode pillow scipy mutagen pytest
+
+and the native environment the runner's second stage uses:
+
+    python3 -m venv .venv-native
+    ./.venv-native/bin/pip install -c constraints-macos15.txt PyQt6 mpv \
+        pyobjc-framework-Cocoa numpy scipy psutil requests qrcode pillow \
+        mutagen pytest
+    mkdir -p .venv-native/mpvlib
+    ln -sfn "$PWD/native_dual_view/Frameworks/singws_libmpv.2.dylib" \
+        .venv-native/mpvlib/libmpv.dylib
+
+The symlink exists because python-mpv resolves its library through
+`ctypes.util.find_library("mpv")`, which cannot see our renamed
+`singws_libmpv.2.dylib`. Pointing it there means the native tests exercise the
+bundle's own libmpv rather than a Homebrew one; `run_tests.sh` exports
+`DYLD_FALLBACK_LIBRARY_PATH` for it automatically.
+
+**`mutagen` is required, and omitting it fails in the worst possible way.**
+`media_helpers.probe_duration_seconds()` catches the ImportError and returns
+0.0 for *every* file, which silently disables `detect_trailing_silence()` --
+it reports "no trailing silence" as its deliberate fail-safe. Nothing raises.
+This is what made `test_phrase_detect` look like an unfixable environment
+failure (`0.0 != 1.0`) for months. It is pinned in `constraints-macos15.txt`
+and is a `hiddenimport` in the spec, so shipped builds always have it.
 
 `constraints-macos15.txt` is the pin set the arm64 build enforces, so the test
 venv and the build agree. It replaced `constraints-macos12.txt` on 2026-09-16:
@@ -414,10 +438,16 @@ untracked, so `git worktree add` does not bring them:
         native_dual_view/Frameworks      # 59 arm64 mpv dylibs, 38 MB
     ln -sfn /Users/daniel/Documents/SingWS/SingWS-Server SingWS-Server
 
-**Recorded baseline — branch `2.0` at the MS0 foundation, 2026-09-16:**
-**1045 passed, 2 failed, 34 subtests, ~66 s.** Identical on Qt 6.9.1 and Qt 6.11.0,
-so the Qt upgrade moved nothing the suite can see — but see the rendering caveat
-in `constraints-macos15.txt`: it cannot see rendering at all. The two failures are pre-existing
+**Recorded baseline — SingWS-Pro `main`, 2026-09-16, M1 Max / macOS 27:**
+`./tools/run_tests.sh` **exits 0**: 1129 passed + 51 subtests in the primary
+stage, then 86 passed in the native stage. No failures, nothing skipped.
+Identical on Qt 6.9.1 and Qt 6.11.0, so the Qt upgrade moved nothing the suite
+can see — but see the rendering caveat in `constraints-macos15.txt`: it cannot
+see rendering at all.
+
+Before this, the runner exited 1 even on a green run because its second stage
+looked for a `.venv-universal` that does not exist here. It now defaults to
+`.venv-native`. `release.sh` gates on this exit code. The two failures are pre-existing
 test debt that fails identically on `main`, so they are not a 2.0 regression:
 
 - `test_karafun_fullscreen.py::FullscreenTests::test_failed_verification_does_not_claim_success_or_click_again`

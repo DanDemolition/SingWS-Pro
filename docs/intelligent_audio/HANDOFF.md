@@ -209,9 +209,20 @@ and look at it before trusting Qt 6.11. No build was made.
   empty plugin path whatever the versions are. A fresh `qtvenv` works in both
   offscreen and cocoa — and 6.11.0 bindings against 6.11.2 frameworks work fine,
   which is a version split.
-- The secondary native stage still wants `.venv-universal` (mpv + pyobjc) and
-  exits 1 without it, so `run_tests.sh` returns non-zero even on a fully green
-  run. `release.sh` gates on this. **Unresolved.**
+- **Resolved.** The secondary native stage wanted a `.venv-universal` that does
+  not exist here, so `run_tests.sh` exited 1 even on a green run — and
+  `release.sh` gates on that. It now defaults to `.venv-native`, exports
+  `DYLD_FALLBACK_LIBRARY_PATH` for python-mpv, and the whole runner **exits 0**:
+  1129 passed + 51 subtests, then 86 native passed.
+- **`mutagen` was the real cause of the long-standing `test_phrase_detect`
+  failure**, not the environment in the vague sense AGENTS.md claimed.
+  `media_helpers.probe_duration_seconds()` swallows the ImportError and returns
+  0.0 for every file, which silently disables `detect_trailing_silence()` (0.0
+  is its deliberate fail-safe, so nothing raises). Shipped builds are unaffected
+  — the spec lists mutagen as a hiddenimport — but it was missing from the
+  documented venv recipe and from the pin set. Both fixed.
+  Worth a follow-up: that bare `except Exception` turns a missing dependency
+  into silently degraded end-of-song detection rather than a loud failure.
 
 ## Added scope
 

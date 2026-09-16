@@ -40,3 +40,8 @@ numpy==2.5.3
 scipy==1.18.1
 PyQt6==6.11.0
 PyQt6-Qt6==6.11.2
+
+# Runtime metadata dependency. media_helpers.probe_duration_seconds() swallows
+# a missing mutagen and returns 0.0 for every file, which silently disables
+# trailing-silence detection; the spec lists it as a hiddenimport.
+mutagen==1.48.1
