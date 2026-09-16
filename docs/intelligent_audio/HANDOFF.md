@@ -368,20 +368,64 @@ explicitly turns them on.
 Rollback: delete nothing — the helper is a separate optional binary the spec
 bundles only if built, and the app has no code path that starts it yet.
 
+## Done — Prompt 12 / final integration audit (2026-09-16)
+
+`docs/intelligent_audio/FINAL_AUDIT.md`. Every claim cites a symbol or test.
+
+**Verdict: not production-ready**, and the gap is evidence rather than code. The
+observer has watched zero songs and the effects stream has carried zero audio, so
+the two newest subsystems are written but unexercised.
+
+Passed, with citations: isolation by failure domain; no allocator, lock or I/O
+symbol reachable from the real-time core (enforced by `build.sh --test`, not by
+review); bounded queues with a counted drop policy; stale generations and
+backwards clocks rejected; device loss transient everywhere; mic audio never
+persisted; model and analyzer versions stamped and checked; Off restores legacy;
+all three Swift helpers arm64 in the bundle; settings migrations additive.
+
+The strongest result is that the observer's lack of playback authority is
+**structural** — `ast`-based tests assert it imports nothing that can play and
+exposes inputs only. `vocal_fx.py` carries the same guard. Assisted mode cannot
+exceed its authority because it does not exist; `MODES` is `("off","observer")`.
+Note that "human controls always win" is currently true *by absence* and must be
+re-audited the moment Assisted exists.
+
+**One defect found and fixed:** `vfx_engine_destroy` disposed its audio units but
+never deregistered the two Core Audio property listeners installed in `create`,
+leaving Core Audio holding a pointer to freed memory — reachable via `create`'s
+own failure path. Same class as the live-show rule 9 watchdog use-after-free, and
+invisible to every test because the stream has never run. No regression test was
+added: reproducing it needs a live device property change, which is exactly the
+capability this audit says is missing. Recorded as a gap rather than papered over.
+
+**Release blockers:** (1) no observer evidence, so the assisted gate stays No-Go;
+(2) ad-hoc signing with no hardened runtime and no notarization — today's location
+finding proved TCC grants do not survive ad-hoc rebuilds, and the mic/effects
+helpers need microphone permission; (3) the effects audio path is unproven, so
+VFX0's own deliverable does not exist; (4) the logging queue at `0.2.18.1.py:2649`
+is still an unbounded `SimpleQueue`; (5) `vfx_*` keys are absent from `DEFAULTS`,
+so effects settings would not persist once a UI lands.
+
 ## Next task
 
 Prompts 9 part 1 (No-Go), 10 (design) and 11 (VFX0/VFX1 code) are done.
 
-**Prompt 12, the final integration audit, is next** — but it audits a system
-whose two newest subsystems have never run: the observer has watched no songs,
-and the effects stream has never carried audio. The audit can be written, and
-will honestly conclude that the hardware and live-show gates are all still open.
+**All twelve roadmap prompts are complete.** What remains is not prompt work.
 
-The two things that actually move this forward are operator work, not code:
-1. Install the Pro build, run real songs with `ia_instrumentation_enabled` on,
-   and collect observer logs (unblocks Prompt 9 part 2).
-2. Work the Signature 10 checklist with amps down (unblocks VFX2 onward and
-   produces the real round-trip latency number).
+Two operator tasks, in this order, because everything else waits on them:
+1. **Install the Pro build and run real songs** with `ia_instrumentation_enabled`
+   on and the observer in `observer` mode; collect the logs. This alone unblocks
+   `ASSISTED_MODE_GATE.md` and converts the largest unverified block into evidence.
+2. **Work the Signature 10 checklist** (end of `VOCAL_EFFECTS_ARCHITECTURE.md`),
+   amps down, and record the measured round-trip latency.
+
+The highest-value code task meanwhile is **moving off ad-hoc signing** (blocker 2).
+It is the one item that will otherwise keep re-breaking permissions on every build,
+and it has already cost one investigation.
+
+Remaining milestone work from `docs/2.0/plan.md` is unrelated to Intelligent
+Audio: MS1 key detection, MS2 transitions, MS3 stems, MS4 pitch/key/tempo UI,
+MS5 mixer control, MS6 host UI overhaul, MS7 command registry/hotkeys/Stream Deck.
 
 In parallel, the only thing that unblocks Prompt 9 is show data: install the Pro
 build and run real songs with `ia_instrumentation_enabled` on.

@@ -339,6 +339,18 @@ void vfx_engine_destroy(vfx_engine *e)
 {
     if (!e) return;
     vfx_engine_stop(e);
+    /* Deregister before the struct is freed. These listeners are installed in
+     * create() *before* AudioUnitInitialize, so the failure path here would
+     * otherwise leave Core Audio holding a pointer to freed memory and call
+     * into it on the next device property change. */
+    if (e->device != kAudioObjectUnknown) {
+        AudioObjectPropertyAddress la = { kAudioDevicePropertyDeviceIsAlive,
+                                          kAudioObjectPropertyScopeGlobal,
+                                          kAudioObjectPropertyElementMain };
+        AudioObjectRemovePropertyListener(e->device, &la, device_listener, e);
+        la.mSelector = kAudioDevicePropertyNominalSampleRate;
+        AudioObjectRemovePropertyListener(e->device, &la, device_listener, e);
+    }
     if (e->reverb) { AudioUnitUninitialize(e->reverb); AudioComponentInstanceDispose(e->reverb); }
     if (e->io)     { AudioUnitUninitialize(e->io);     AudioComponentInstanceDispose(e->io); }
     free(e->in_abl); free(e->in_scratch); free(e->mix);
