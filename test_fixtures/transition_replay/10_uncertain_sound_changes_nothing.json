@@ -1,0 +1,11 @@
+{"name": "Uncertain windows neither start nor clear vocal activity; one vocal window is not enough",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 178.0, "step": 1.0},
+   {"t": 178.0, "type": "sound", "result": "active_vocal", "confidence": 0.9, "repeat": 1},
+   {"t": 178.5, "type": "sound", "result": "uncertain", "confidence": 0.3, "repeat": 6},
+   {"t": 182.0, "type": "play", "from": 179.0, "to": 200.0, "step": 1.0},
+   {"t": 200.2, "type": "end", "trigger": "eos"}],
+ "expect": [{"kind": "observer_proposal", "action": "end_karaoke", "playhead_s": 181.0}],
+ "forbid": [{"kind": "observer_evidence"}, {"action": "hold"}]}

@@ -1,0 +1,18 @@
+{"name": "Host talks right after the song: BGM enters low, duck while talking, raise after",
+ "mic_mode": "singer_protection_host_ducking",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 178.0, "step": 1.0},
+   {"t": 178.0, "type": "mic", "roles": {"singer1": "silent", "host": "active"}, "repeat": 10},
+   {"t": 179.0, "type": "play", "from": 179.0, "to": 186.0, "step": 1.0},
+   {"t": 186.2, "type": "end", "trigger": "verified_silent_tail"},
+   {"t": 187.0, "type": "mic", "roles": {"singer1": "silent", "host": "silent"}, "repeat": 20},
+   {"t": 190.0, "type": "mic", "roles": {"singer1": "silent", "host": "sustained"}, "repeat": 10}],
+ "expect": [
+   {"kind": "observer_evidence", "evidence": "host_mic", "state": "on"},
+   {"kind": "observer_proposal", "action": "bgm_fade_in_low", "reason": "host_speaking"},
+   {"kind": "observer_compare", "event": "song_end", "host_mic_at_end": true},
+   {"kind": "observer_proposal", "action": "bgm_raise", "context": "between_songs"},
+   {"kind": "observer_proposal", "action": "bgm_duck", "context": "between_songs"}],
+ "forbid": [{"action": "hold"}]}

@@ -1,0 +1,15 @@
+{"name": "Duet: second singer still active keeps the hold even when singer 1 stops",
+ "mic_mode": "singer_protection",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 178.0, "step": 1.0},
+   {"t": 178.0, "type": "mic", "roles": {"singer1": "active", "singer2": "active"}, "repeat": 10},
+   {"t": 179.0, "type": "mic", "roles": {"singer1": "silent", "singer2": "sustained"}, "repeat": 30},
+   {"t": 182.0, "type": "play", "from": 179.0, "to": 182.0, "step": 1.0},
+   {"t": 182.5, "type": "end", "trigger": "manual_stop"}],
+ "expect": [
+   {"kind": "observer_proposal", "action": "hold_bgm"},
+   {"kind": "observer_proposal", "action": "hold", "reason": "singer_mic_active"},
+   {"kind": "observer_compare", "event": "song_end", "singer_mic_at_end": true}],
+ "forbid": [{"action": "end_karaoke"}, {"action": "bgm_fade_in"}]}

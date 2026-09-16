@@ -1,0 +1,9 @@
+{"name": "Events from a previous song cannot create proposals for the current one",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 1.0, "type": "stale_position", "generation": 0, "playhead": 199.0},
+   {"t": 2.0, "type": "position", "playhead": 2.0},
+   {"t": 3.0, "type": "end", "trigger": "manual_stop"}],
+ "expect": [{"kind": "observer_compare", "event": "song_end", "proposed": false}],
+ "forbid": [{"action": "end_karaoke"}, {"action": "bgm_fade_in"}]}

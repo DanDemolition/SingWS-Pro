@@ -1,0 +1,19 @@
+{"name": "Singer holds the final note past the cues: hold BGM and end, then propose once the mic goes quiet",
+ "mic_mode": "singer_protection",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 176.0, "step": 1.0},
+   {"t": 176.0, "type": "mic", "roles": {"singer1": "sustained", "singer2": "silent", "host": "silent"}, "repeat": 10},
+   {"t": 177.0, "type": "play", "from": 177.0, "to": 183.0, "step": 1.0},
+   {"t": 183.2, "type": "mic", "roles": {"singer1": "silent", "singer2": "silent", "host": "silent"}, "repeat": 15},
+   {"t": 185.0, "type": "play", "from": 185.0, "to": 200.0, "step": 1.0},
+   {"t": 200.2, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_evidence", "evidence": "singer_mic", "state": "on"},
+   {"kind": "observer_proposal", "action": "hold_bgm", "reason": "singer_mic_active"},
+   {"kind": "observer_proposal", "action": "hold", "reason": "singer_mic_active"},
+   {"kind": "observer_evidence", "evidence": "singer_mic", "state": "off"},
+   {"kind": "observer_proposal", "action": "bgm_fade_in", "playhead_s": 185.0, "after_hold": true},
+   {"kind": "observer_proposal", "action": "end_karaoke", "playhead_s": 185.0}],
+ "forbid": [{"action": "end_karaoke", "playhead_s": 181.0}]}

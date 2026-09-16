@@ -1,0 +1,8 @@
+{"name": "No lyric evidence: silence alone never proposes an early end",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 120.0},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 200.0, "step": 1.0},
+   {"t": 200.2, "type": "end", "trigger": "eos"}],
+ "expect": [{"kind": "observer_compare", "event": "song_end", "proposed": false}],
+ "forbid": [{"action": "end_karaoke"}]}

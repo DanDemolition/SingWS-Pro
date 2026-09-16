@@ -1,0 +1,12 @@
+{"name": "Host seeks back: proposals suspended for the rest of the song",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 100.0, "step": 1.0},
+   {"t": 101.0, "type": "seek", "playhead": 20.0},
+   {"t": 101.0, "type": "play", "from": 20.0, "to": 200.0, "step": 1.0},
+   {"t": 282.0, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_compare", "event": "seek"},
+   {"kind": "observer_compare", "event": "song_end", "seeked": true, "proposed": false}],
+ "forbid": [{"action": "end_karaoke"}, {"action": "bgm_fade_in"}]}

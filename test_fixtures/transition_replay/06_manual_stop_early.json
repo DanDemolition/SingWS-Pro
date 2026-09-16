@@ -1,0 +1,8 @@
+{"name": "Host stops mid-song before any cue",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 60.0, "step": 1.0},
+   {"t": 60.5, "type": "end", "trigger": "manual_stop"}],
+ "expect": [{"kind": "observer_compare", "event": "song_end", "trigger": "manual_stop", "manual": true, "proposed": false}],
+ "forbid": [{"action": "end_karaoke"}]}

@@ -1,0 +1,17 @@
+{"name": "All-stale reports drop evidence; silent channels behave like no mics",
+ "mic_mode": "singer_protection_host_ducking",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 170.0, "step": 1.0},
+   {"t": 170.0, "type": "mic", "roles": {"singer1": "sustained", "host": "silent"}, "repeat": 10},
+   {"t": 171.0, "type": "mic", "roles": {"singer1": "stale", "host": "stale"}, "repeat": 1},
+   {"t": 171.5, "type": "mic", "roles": {"singer1": "silent", "host": "silent"}, "repeat": 20},
+   {"t": 174.0, "type": "play", "from": 171.0, "to": 200.0, "step": 1.0},
+   {"t": 200.2, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_evidence", "evidence": "singer_mic", "state": "on"},
+   {"kind": "observer_evidence", "evidence": "mic", "state": "unavailable", "reason": "mic_stale"},
+   {"kind": "observer_proposal", "action": "bgm_fade_in", "playhead_s": 180.0},
+   {"kind": "observer_proposal", "action": "end_karaoke", "playhead_s": 181.0}],
+ "forbid": [{"action": "hold"}, {"action": "bgm_duck"}]}

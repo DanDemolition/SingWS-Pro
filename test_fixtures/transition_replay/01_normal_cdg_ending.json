@@ -1,0 +1,10 @@
+{"name": "CDG with verified lyrics end and dead tail",
+ "record": {"duration": 200.0, "audio_start": 4.0, "audio_end": 180.0, "visual_end": 178.0, "visual_confidence": 0.95},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 200.0, "step": 0.5},
+   {"t": 200.3, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_proposal", "action": "bgm_fade_in", "playhead_s": 180.0},
+   {"kind": "observer_proposal", "action": "end_karaoke", "playhead_s": 180.5},
+   {"kind": "observer_compare", "event": "song_end", "trigger": "eos", "proposed": true}]}

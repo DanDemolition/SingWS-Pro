@@ -125,6 +125,8 @@ import hashlib
 import contextlib
 import song_index  # local module (~/SingWSPro/singws.db)
 import transition_events  # Phase 0 Intelligent Audio instrumentation (passive)
+import transition_cues  # Phase 1 cue candidates (pure)
+import transition_observer  # Phase 2 observer: proposes, never acts
 import phrase_markers  # local module (~/SingWS/phrase_markers.db) — Phrase-Aligned Song Start
 import phrase_detect  # local module — tempo/beat analysis + beat-aligned loops
 import transition_analysis  # pure, fail-closed audio/visual transition metadata
@@ -3074,6 +3076,161 @@ def _perf_record(name: str, ms: float):
     except Exception:
         pass
 
+_IA_OBSERVER = transition_observer.TransitionObserver(transition_events.record)
+_IA_SOUND = {"enabled": False, "monitor": None, "last_seq": 0}
+
+
+def _ia_native_helper_path(name: str) -> Path:
+    if getattr(sys, "frozen", False):
+        for base in (getattr(sys, "_MEIPASS", None), Path(sys.executable).resolve().parent):
+            if base and (Path(base) / name).is_file():
+                return Path(base) / name
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / name
+    return Path(__file__).resolve().parent / "native" / "sound_helper" / name
+
+
+def _ia_sound_helper_path() -> Path:
+    return _ia_native_helper_path("SingWSSoundHelper")
+
+
+def _ia_sound_monitor():
+    """Lazily create the sound monitor; None when disabled. Never raises."""
+    try:
+        if not _IA_SOUND["enabled"]:
+            return None
+        if _IA_SOUND["monitor"] is None:
+            import sound_monitor
+
+            def _health(state, reason):
+                transition_events.record("sound_health", state=str(state), reason=str(reason))
+                if state == sound_monitor.STATE_BYPASSED:
+                    _IA_OBSERVER.sound_unavailable(reason=str(reason))
+
+            _IA_SOUND["monitor"] = sound_monitor.SoundMonitor(_ia_sound_helper_path(), on_health=_health)
+        return _IA_SOUND["monitor"]
+    except Exception:
+        return None
+
+
+_IA_MIC = {"monitor": None, "last_seq": 0, "last_reason": ""}
+
+
+def _ia_mic_configure(settings: dict):
+    """(Re)start the live-mic monitor from settings. Advisory evidence only. Never raises."""
+    try:
+        import mic_config
+        import mic_monitor
+        old = _IA_MIC["monitor"]
+        _IA_MIC["monitor"], _IA_MIC["last_seq"], _IA_MIC["last_reason"] = None, 0, ""
+        if old is not None:
+            threading.Thread(target=old.shutdown, daemon=True, name="mic-monitor-stop").start()
+        _IA_OBSERVER.set_mic_mode(str(settings.get("ia_mic_observer_mode", "singer_protection_host_ducking")))
+        if not bool(settings.get("ia_mic_awareness_enabled", False)):
+            _IA_OBSERVER.mic_unavailable(reason="disabled")
+            return
+        config = mic_config.MicInputConfig.from_settings(settings.get("ia_mic_config"))
+        if config.problems():
+            _IA_OBSERVER.mic_unavailable(reason="config:" + ",".join(config.problems()))
+            return
+
+        def _health(state, reason):
+            transition_events.record("sound_health", source="mic", state=str(state), reason=str(reason))
+
+        monitor = mic_monitor.MicMonitor(_ia_native_helper_path("SingWSMicMeter"), config, on_health=_health)
+        _IA_MIC["monitor"] = monitor
+        monitor.arm()   # launches on its own thread; levels only
+    except Exception:
+        pass
+
+
+def _ia_mic_tick():
+    """Feed the newest mic snapshot to the observer (once per report). O(1), never raises."""
+    try:
+        monitor = _IA_MIC["monitor"]
+        if monitor is None:
+            return
+        snap = monitor.latest()
+        if snap is None:
+            reason = f"{monitor.state}:{monitor.reason}"
+            if reason != _IA_MIC["last_reason"]:
+                _IA_MIC["last_reason"] = reason
+                _IA_OBSERVER.mic_unavailable(reason=reason)
+            return
+        _IA_MIC["last_reason"] = ""
+        if int(snap.get("seq", 0)) > _IA_MIC["last_seq"]:
+            _IA_MIC["last_seq"] = int(snap["seq"])
+            _IA_OBSERVER.mic(roles=snap["roles"], t_mono=float(snap["t_mono"]))
+    except Exception:
+        pass
+
+
+def _ia_sound_configure(enabled: bool):
+    try:
+        _IA_SOUND["enabled"] = bool(enabled)
+        if not enabled and _IA_SOUND["monitor"] is not None:
+            _IA_SOUND["monitor"].disarm()
+            _IA_OBSERVER.sound_unavailable(reason="disabled")
+    except Exception:
+        pass
+
+
+def _ia_observer_active() -> bool:
+    return transition_events.recorder().enabled and _IA_OBSERVER.mode == transition_observer.MODE_OBSERVER
+
+
+def _ia_observe(owner, what: str, **kwargs):
+    """Feed the Phase 2 observer plain values. Never raises; never touches playback."""
+    try:
+        if not _ia_observer_active():
+            return
+        now = time.monotonic()
+        generation = int(getattr(owner, "_ia_karaoke_generation", 0) or 0)
+        if what == "start":
+            record = None
+            for candidate in (getattr(owner, "_current_karaoke_audio_path", ""), kwargs.get("video_path")):
+                if candidate:
+                    record = transition_analysis_cached(str(candidate))  # no decode; None while cache loads
+                    if record is not None:
+                        break
+            _IA_OBSERVER.song_started(
+                generation=generation,
+                track=transition_events.track_id(getattr(owner, "_current_karaoke_audio_path", "")),
+                cues=transition_cues.derive_cues(record), t_mono=now,
+                playhead=float(kwargs.get("playhead", 0.0) or 0.0),
+            )
+        elif what == "position":
+            playhead = float(kwargs["playhead"])
+            monitor = _ia_sound_monitor()
+            if monitor is not None:
+                if _IA_OBSERVER.listening_window(generation=generation, playhead=playhead):
+                    monitor.arm()   # launches the helper on its own thread
+                    snap = monitor.latest()
+                    if snap is not None and int(snap.get("seq", 0)) > _IA_SOUND["last_seq"]:
+                        _IA_SOUND["last_seq"] = int(snap["seq"])   # each window counts once
+                        _IA_OBSERVER.sound(generation=generation, result=snap["result"],
+                                           confidence=snap["confidence"], t_mono=snap["t_mono"],
+                                           model=snap.get("model", ""))
+                else:
+                    monitor.disarm()
+            _IA_OBSERVER.position(generation=generation, playhead=playhead, t_mono=now)
+        elif what == "seek":
+            monitor = _ia_sound_monitor()
+            if monitor is not None:
+                monitor.disarm()
+            _IA_OBSERVER.seeked(generation=generation, playhead=float(kwargs["playhead"]), t_mono=now)
+        elif what == "bgm":
+            _IA_OBSERVER.bgm_started(t_mono=now)
+        elif what == "tick":
+            _ia_mic_tick()
+        elif what == "end":
+            monitor = _ia_sound_monitor()
+            if monitor is not None:
+                monitor.disarm()
+            _IA_OBSERVER.song_ended(generation=generation, trigger=str(kwargs.get("trigger", "eos")), t_mono=now)
+    except Exception:
+        pass
+
+
 def _ia_record(owner, kind: str, playhead_s=None, **data):
     """Passive Phase 0 transition event. O(1), never raises, no-op when disabled.
 
@@ -3528,6 +3685,11 @@ DEFAULTS = {
     "empty_rotation_slot_timeout_sec": 180, # keep a singer's place briefly while replacing a removed song
     "intro_loop_enabled": False,            # between songs: loop the next song's intro (instead of BGM)
     "intro_loop_bars": 8,                   # bars to loop: 4 / 8 / 16
+    "ia_mic_awareness_enabled": False,  # Prompt 7: live mic levels from the mixer (diagnostic only)
+    "ia_mic_config": {},
+    "ia_mic_observer_mode": "singer_protection_host_ducking",  # off | observe | singer_protection | singer_protection_host_ducking (advisory only)                 # device UID, preset, role->channel map, calibrated floors
+    "ia_sound_classifier_enabled": False,  # Prompt 6: Apple SoundAnalysis helper feeds the observer (advisory only)
+    "transition_observer_mode": "observer",  # off | observer. Observer only logs proposals (needs ia_instrumentation_enabled)
     "ia_instrumentation_enabled": False,  # Phase 0: passive transition event log (logs/transition_events_*.jsonl)
     "seamless_transitions_enabled": True,  # master safety switch; OFF preserves normal physical EOS behavior
     "karaoke_bgm_crossfade_enabled": False, # allow intentional karaoke -> BGM overlap at song end
@@ -5544,6 +5706,7 @@ class BackgroundMusicPlayer(QObject):
             fade_ms=int(duration_ms or 0),
             during_karaoke=bool(self._karaoke_is_active()),
         )
+        _ia_observe(self, "bgm")
     
         # If no target volume specified, use manager slider if open; else saved setting
         if target_volume is None:
@@ -20208,6 +20371,9 @@ class KaraokeApp(QWidget):
                 enabled=bool(self.settings.get("ia_instrumentation_enabled", False)),
                 log_dir=LOGS_DIR,
             )
+            _IA_OBSERVER.set_mode(str(self.settings.get("transition_observer_mode", "observer")))
+            _ia_sound_configure(bool(self.settings.get("ia_sound_classifier_enabled", False)))
+            _ia_mic_configure(self.settings)
         except Exception:
             pass
         try:
@@ -24312,6 +24478,7 @@ class KaraokeApp(QWidget):
                 looped=bool(loop_seconds),
                 has_video=bool(video_path),
             )
+            _ia_observe(self, "start", playhead=float(start_seconds or 0.0), video_path=video_path)
         except Exception:
             pass
         # mpv owns the audio here, so the SingWS chain runs as mpv `af` filters
@@ -25694,9 +25861,31 @@ class KaraokeApp(QWidget):
         except Exception:
             pass
 
+    def _open_mic_diagnostics(self):
+        try:
+            import mic_diagnostics_dialog
+
+            def _save(values: dict):
+                self.settings.update(values)
+                self._schedule_save_settings()
+                _ia_mic_configure(self.settings)
+
+            dialog = mic_diagnostics_dialog.MicDiagnosticsDialog(
+                self, settings=self.settings,
+                helper_path=_ia_native_helper_path("SingWSMicMeter"), on_save=_save,
+            )
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            dialog.show()
+        except Exception as exc:
+            _diag(f"[MIC] diagnostics dialog failed: {exc}")
+
     def _on_app_about_to_quit(self):
         self._app_closing = True
         try:
+            if _IA_SOUND["monitor"] is not None:
+                _IA_SOUND["monitor"].shutdown()
+            if _IA_MIC["monitor"] is not None:
+                _IA_MIC["monitor"].shutdown()
             transition_events.recorder().close()
         except Exception:
             pass
@@ -26042,6 +26231,7 @@ class KaraokeApp(QWidget):
         try:
             transport.seek(seconds)
             _ia_record(self, "manual_seek", playhead_s=float(seconds))
+            _ia_observe(self, "seek", playhead=float(seconds))
             return True
         except Exception as e:
             _diag(f"[PY-KARAOKE] seek failed: {e}")
@@ -26215,6 +26405,7 @@ class KaraokeApp(QWidget):
             auto_advance=bool(early_auto_advance),
             crossfade_enabled=bool(self._karaoke_bgm_crossfade_enabled()),
         )
+        _ia_observe(self, "end", trigger=trigger)
 
         # True end-overlap path: start BG fade immediately, then teardown karaoke shortly after.
         can_overlap = (
@@ -28118,6 +28309,11 @@ class KaraokeApp(QWidget):
         ia_instrumentation_cb.setChecked(bool(self.settings.get("ia_instrumentation_enabled", False)))
         v.addWidget(ia_instrumentation_cb)
 
+        ia_mic_btn = QPushButton("Live Mic Inputs…")
+        ia_mic_btn.setToolTip("Choose the mixer's USB inputs for singers and host, watch meters, and calibrate. "
+                              "Diagnostic only; playback is not changed and nothing is recorded.")
+        v.addWidget(ia_mic_btn)
+
         end_silence_cb = QCheckBox("Skip verified silence at the end of karaoke songs")
         end_silence_cb.setToolTip("Ends after the scanned final audible audio, without waiting for silent credits or a final graphics card. Unscanned songs play to their normal end.")
         end_silence_cb.setChecked(bool(self.settings.get("karaoke_trim_verified_tail", True)))
@@ -28974,6 +29170,7 @@ class KaraokeApp(QWidget):
         seamless_transitions_cb.toggled.connect(on_seamless_transitions_toggled)
         karaoke_bgm_crossfade_cb.toggled.connect(on_karaoke_bgm_crossfade_toggled)
         ia_instrumentation_cb.toggled.connect(on_ia_instrumentation_toggled)
+        ia_mic_btn.clicked.connect(self._open_mic_diagnostics)
         end_silence_cb.toggled.connect(on_end_silence_toggled)
         auto_advance_cb.toggled.connect(on_auto_advance_toggled)
         end_threshold_spin.valueChanged.connect(on_end_threshold_changed)
@@ -38762,6 +38959,7 @@ class KaraokeApp(QWidget):
 
     def update_time_left(self):
         _perf_t0 = time.perf_counter()
+        _ia_observe(self, "tick")
         # Reflect any pause/resume state on the button label.
         try:
             self._update_karaoke_pause_button()
@@ -38771,6 +38969,7 @@ class KaraokeApp(QWidget):
         dur = self._effective_karaoke_duration_ns(dur)
         if dur is not None and pos is not None and dur > 0:
             self._update_karaoke_seek_ui(pos / NS_PER_SECOND, dur / NS_PER_SECOND)
+            _ia_observe(self, "position", playhead=pos / NS_PER_SECOND)
             crossfade_enabled = self._karaoke_bgm_crossfade_enabled()
 
             # --- BG crossfade pre-start: kick off BG fade while karaoke audio is still playing ---
@@ -53705,6 +53904,7 @@ class KaraokeApp(QWidget):
 
     def stop_playback(self, skip_confirmation=False):
         _ia_record(self, "manual_stop", karaoke_playing=bool(getattr(self, "karaoke_playing", False)))
+        _ia_observe(self, "end", trigger="manual_stop")
         # A song stopped before it ended was never performed, so it must not be
         # recorded as sung -- otherwise the singer cannot re-add it. On a real
         # media end _finish_media_end_cleanup has already committed it, so this

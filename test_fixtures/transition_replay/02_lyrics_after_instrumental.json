@@ -1,0 +1,10 @@
+{"name": "Final lyric outlasts audio; never propose ending before the lyric",
+ "record": {"duration": 210.0, "audio_start": 3.0, "audio_end": 150.0, "visual_end": 190.0, "visual_confidence": 0.9},
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 210.0, "step": 0.5},
+   {"t": 210.2, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_proposal", "action": "bgm_fade_in", "playhead_s": 150.0},
+   {"kind": "observer_proposal", "action": "end_karaoke", "playhead_s": 190.5}],
+ "forbid": [{"action": "end_karaoke", "playhead_s": 150.0}]}

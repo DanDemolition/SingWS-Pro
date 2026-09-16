@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2500" viewBox="0 0 1800 2500">
+  <defs>
+    <style>
+      .bg{fill:#111318}.panel{fill:#1b1f27;stroke:#485160;stroke-width:3}.title{fill:#fff;font:700 54px Arial,sans-serif}.sub{fill:#cbd4df;font:400 26px Arial,sans-serif}.h{fill:#fff;font:700 36px Arial,sans-serif}.label{fill:#f3f6fa;font:700 26px Arial,sans-serif}.small{fill:#d9e0e8;font:400 22px Arial,sans-serif}.tiny{fill:#bec8d3;font:400 19px Arial,sans-serif}.box{fill:#292f3a;stroke:#718096;stroke-width:2}.mic{fill:#183d53;stroke:#55b7e8;stroke-width:3}.mixer{fill:#413318;stroke:#e8b455;stroke-width:3}.mac{fill:#233b2c;stroke:#65ce86;stroke-width:3}.speaker{fill:#3b223d;stroke:#ce75d4;stroke-width:3}.warn{fill:#482323;stroke:#ff7777;stroke-width:3}.note{fill:#263044;stroke:#7fa6e8;stroke-width:2}.arrow{fill:none;stroke:#e8edf4;stroke-width:5;marker-end:url(#a)}.usb{fill:none;stroke:#65ce86;stroke-width:6;marker-end:url(#ag)}.aux{fill:none;stroke:#55b7e8;stroke-width:6;marker-end:url(#ab)}.wet{fill:none;stroke:#e8b455;stroke-width:6;marker-end:url(#ay)}.main{fill:none;stroke:#ce75d4;stroke-width:6;marker-end:url(#ap)}
+    </style>
+    <marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8edf4"/></marker>
+    <marker id="ag" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#65ce86"/></marker>
+    <marker id="ab" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#55b7e8"/></marker>
+    <marker id="ay" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8b455"/></marker>
+    <marker id="ap" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ce75d4"/></marker>
+  </defs>
+  <rect class="bg" width="1800" height="2500"/>
+  <text class="title" x="70" y="85">SingWS USB Mixer Hookup Guide</text>
+  <text class="sub" x="70" y="128">Transition awareness now • wet-only vocal effects later • dry microphones always stay in the mixer</text>
+
+  <!-- Signature 10 -->
+  <rect class="panel" x="50" y="170" width="1700" height="650" rx="24"/>
+  <text class="h" x="85" y="220">A. Soundcraft Signature 10 — two-channel Aux workaround</text>
+  <rect class="mic" x="85" y="270" width="255" height="105" rx="14"/><text class="label" x="118" y="316">Singer mics 1 + 2</text><text class="small" x="118" y="350">normal mic channels</text>
+  <rect class="mic" x="85" y="430" width="255" height="105" rx="14"/><text class="label" x="118" y="476">Host microphone</text><text class="small" x="118" y="510">normal mic channel</text>
+  <rect class="mixer" x="465" y="265" width="445" height="315" rx="18"/>
+  <text class="label" x="505" y="310">SIGNATURE 10</text>
+  <text class="small" x="505" y="355">Singer channels → AUX 1</text>
+  <text class="small" x="505" y="392">Host channel → AUX 2</text>
+  <text class="small" x="505" y="429">USB OUT switch → AUX 1–2</text>
+  <text class="small" x="505" y="466">USB return → stereo 9/10</text>
+  <text class="small" x="505" y="503">Channel 9/10 AUX knobs → ZERO</text>
+  <text class="tiny" x="505" y="548">Dry mics remain routed to Main L/R</text>
+  <rect class="mac" x="1080" y="290" width="365" height="235" rx="18"/>
+  <text class="label" x="1130" y="337">MAC + SingWS</text>
+  <text class="small" x="1130" y="376">USB input 1 = singers</text>
+  <text class="small" x="1130" y="412">USB input 2 = host</text>
+  <text class="small" x="1130" y="448">USB output = song +</text>
+  <text class="small" x="1130" y="480">wet-only effects return</text>
+  <rect class="speaker" x="1510" y="325" width="180" height="140" rx="14"/><text class="label" x="1541" y="382">PA / amps</text><text class="small" x="1541" y="419">Main L/R</text>
+  <path class="arrow" d="M340 322 H465"/><path class="arrow" d="M340 482 H410 V440 H465"/>
+  <path class="usb" d="M910 365 H1080"/><text class="tiny" x="925" y="345">USB: Aux 1/2 → Mac</text>
+  <path class="wet" d="M1080 495 H965 V520 H910"/><text class="tiny" x="930" y="570">USB return → 9/10</text>
+  <path class="main" d="M910 290 H1480 V395 H1510"/>
+  <rect class="warn" x="85" y="635" width="1605" height="125" rx="15"/>
+  <text class="label" x="120" y="680">STOP FEEDBACK:</text><text class="small" x="350" y="680">Keep both AUX knobs on stereo USB-return channel 9/10 fully down.</text>
+  <text class="small" x="120" y="722">Start with speakers/amps down. SingWS receives combined singers, so duet pitch correction is not suitable.</text>
+
+  <!-- Ui -->
+  <rect class="panel" x="50" y="850" width="1700" height="820" rx="24"/>
+  <text class="h" x="85" y="900">B. Soundcraft Ui — choose the correct route for your model</text>
+  <rect class="note" x="85" y="950" width="790" height="610" rx="18"/>
+  <text class="label" x="120" y="995">Ui24R — direct USB-B multichannel route</text>
+  <rect class="mic" x="120" y="1040" width="280" height="145" rx="14"/><text class="label" x="153" y="1083">Three mic channels</text><text class="small" x="153" y="1120">Singer 1 • Singer 2</text><text class="small" x="153" y="1155">Host • individually mapped</text>
+  <rect class="mixer" x="480" y="1030" width="330" height="180" rx="16"/><text class="label" x="525" y="1075">Ui24R</text><text class="small" x="525" y="1113">32×32 USB-B audio</text><text class="small" x="525" y="1150">Direct inputs + DAW returns</text>
+  <rect class="mac" x="300" y="1300" width="360" height="175" rx="16"/><text class="label" x="347" y="1345">MAC + SingWS</text><text class="small" x="347" y="1383">Map three input channels</text><text class="small" x="347" y="1420">Return song + wet FX</text>
+  <path class="arrow" d="M400 1110 H480"/><path class="usb" d="M645 1210 V1300"/><text class="tiny" x="660" y="1265">USB-B both ways</text>
+  <text class="small" x="120" y="1525">Patch SingWS return to unused DAW-return channels routed to Main L/R.</text>
+
+  <rect class="note" x="925" y="950" width="765" height="610" rx="18"/>
+  <text class="label" x="960" y="995">Ui12 / Ui16 — external USB interface required</text>
+  <rect class="mic" x="960" y="1040" width="250" height="145" rx="14"/><text class="label" x="996" y="1083">Mixer inputs</text><text class="small" x="996" y="1120">Singers → Aux 1</text><text class="small" x="996" y="1155">Host → Aux 2</text>
+  <rect class="mixer" x="1285" y="1035" width="330" height="155" rx="16"/><text class="label" x="1335" y="1080">Ui12 / Ui16</text><text class="small" x="1335" y="1117">No computer USB</text><text class="small" x="1335" y="1153">audio interface</text>
+  <rect class="box" x="1170" y="1250" width="360" height="135" rx="16"/><text class="label" x="1210" y="1295">2-in / 2-out USB interface</text><text class="small" x="1210" y="1335">line inputs and line outputs</text>
+  <rect class="mac" x="1105" y="1440" width="340" height="90" rx="14"/><text class="label" x="1152" y="1495">MAC + SingWS</text>
+  <path class="arrow" d="M1210 1112 H1285"/><path class="aux" d="M1450 1190 V1218 H1350 V1250"/><text class="tiny" x="1455" y="1232">Aux 1/2 analog</text>
+  <path class="usb" d="M1275 1385 V1440"/><path class="wet" d="M1170 1320 H1010 V1410 H1285 V1190"/>
+  <text class="tiny" x="970" y="1398">Interface outputs → spare Ui line inputs</text>
+  <rect class="warn" x="85" y="1585" width="1605" height="55" rx="12"/><text class="small" x="120" y="1621">Ui12/16 USB-A ports are for media/storage—not a Mac audio interface. Keep return channels out of Aux 1/2.</text>
+
+  <!-- 22 MTK -->
+  <rect class="panel" x="50" y="1700" width="1700" height="580" rx="24"/>
+  <text class="h" x="85" y="1750">C. Soundcraft Signature 22 MTK — individual microphone channels</text>
+  <rect class="mic" x="85" y="1810" width="335" height="210" rx="16"/>
+  <text class="label" x="125" y="1855">Mic input channels</text>
+  <text class="small" x="125" y="1895">Example: Host = Ch 5</text>
+  <text class="small" x="125" y="1932">Singer 1 = Ch 6</text>
+  <text class="small" x="125" y="1969">Singer 2 = Ch 7</text>
+  <rect class="mixer" x="535" y="1795" width="420" height="245" rx="18"/>
+  <text class="label" x="580" y="1840">SIGNATURE 22 MTK</text>
+  <text class="small" x="580" y="1880">Post-gain direct USB sends</text>
+  <text class="small" x="580" y="1917">Map actual mic channel numbers</text>
+  <text class="small" x="580" y="1954">Use a spare stereo USB return</text>
+  <text class="tiny" x="580" y="1992">Do not engage USB return on mic channels</text>
+  <rect class="mac" x="1100" y="1810" width="400" height="220" rx="18"/>
+  <text class="label" x="1145" y="1855">MAC + SingWS</text>
+  <text class="small" x="1145" y="1895">Individual mic analysis</text>
+  <text class="small" x="1145" y="1932">Separate vocal FX possible</text>
+  <text class="small" x="1145" y="1969">Song + wet FX return</text>
+  <path class="arrow" d="M420 1915 H535"/><path class="usb" d="M955 1870 H1100"/><text class="tiny" x="967" y="1848">USB multitrack →</text>
+  <path class="wet" d="M1100 1990 H1000 V2015 H955"/><text class="tiny" x="970" y="2055">← wet-only USB return</text>
+  <path class="main" d="M955 1815 H1600 V1930"/><rect class="speaker" x="1515" y="1870" width="170" height="120" rx="14"/><text class="label" x="1545" y="1920">PA</text><text class="small" x="1545" y="1960">Main L/R</text>
+  <rect class="warn" x="85" y="2100" width="1600" height="125" rx="15"/>
+  <text class="label" x="120" y="2145">IMPORTANT:</text><text class="small" x="305" y="2145">USB-return switches replace a channel's analog source.</text>
+  <text class="small" x="120" y="2187">Return SingWS on an unused stereo channel—not Ch 5/6/7—or the physical microphones disappear from those strips.</text>
+
+  <!-- Footer -->
+  <text class="h" x="70" y="2345">Power-up safety check</text>
+  <text class="small" x="80" y="2390">1. Speakers/amps down.  2. Confirm return channels are NOT sent to capture Aux buses.  3. Confirm dry mics reach Main.</text>
+  <text class="small" x="80" y="2430">4. Confirm SingWS meters move on the intended inputs.  5. Enable wet return at minimum level.  6. Raise PA slowly.</text>
+  <text class="tiny" x="80" y="2475">Channel numbers are examples and must match the physical mixer. Start with detection only; enable vocal-effects return after loopback testing.</text>
+</svg>

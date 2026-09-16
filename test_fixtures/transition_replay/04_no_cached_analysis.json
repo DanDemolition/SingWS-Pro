@@ -1,0 +1,10 @@
+{"name": "Missing metadata: record 'none' and propose nothing",
+ "record": null,
+ "events": [
+   {"t": 0.0, "type": "start"},
+   {"t": 0.0, "type": "play", "from": 0.0, "to": 180.0, "step": 1.0},
+   {"t": 180.1, "type": "end", "trigger": "eos"}],
+ "expect": [
+   {"kind": "observer_proposal", "action": "none", "reason": "no_cached_cues"},
+   {"kind": "observer_compare", "event": "song_end", "proposed": false}],
+ "forbid": [{"action": "end_karaoke"}, {"action": "bgm_fade_in"}]}

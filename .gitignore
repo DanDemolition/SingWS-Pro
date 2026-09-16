@@ -59,3 +59,10 @@ test-baseline*.log
 # Private server repo, checked out locally for app/server integration tests only.
 # Never commit it into this public repo.
 /SingWS-Server/
+
+# Experimental SoundAnalysis probe build output and local reports
+experimental/sound_analysis/SingWSSoundProbe
+experimental/sound_analysis/report*.json
+experimental/sound_analysis/labels.txt
+native/sound_helper/SingWSSoundHelper
+native/sound_helper/SingWSMicMeter

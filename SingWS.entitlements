@@ -5,5 +5,8 @@
     <!-- Required when a hardened/notarized release controls System Events. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- SingWS Pro: live mic level meters from a USB mixer (off by default). -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>

@@ -17,6 +17,13 @@ brew_root = Path("/opt/homebrew") if machine in {"arm64", "aarch64"} else Path("
 
 extra_datas = [(str(project_root / "assets" / "rotation-stage-purple.png"), "assets")]
 binaries = []
+# Prompt 6 sound helper (optional): bundled only if it has been built.
+_sound_helper = project_root / "native" / "sound_helper" / "SingWSSoundHelper"
+if _sound_helper.is_file():
+    binaries.append((str(_sound_helper), "."))
+_mic_meter = project_root / "native" / "sound_helper" / "SingWSMicMeter"
+if _mic_meter.is_file():
+    binaries.append((str(_mic_meter), "."))
 
 for helper in (
     "media_helpers.py",
@@ -32,6 +39,15 @@ for helper in (
     "mac_keep_awake.py",
     "legacy_import.py",
     "transition_events.py",
+    "transition_cues.py",
+    "transition_observer.py",
+    "sound_monitor.py",
+    "sound_classes.py",
+    "mic_config.py",
+    "mic_activity.py",
+    "mic_monitor.py",
+    "mic_diagnostics_dialog.py",
+    "transition_analysis.py",
 ):
     helper_path = project_root / helper
     if helper_path.exists():
@@ -279,6 +295,14 @@ app = BUNDLE(
         'CFBundleVersion': '2.0.0.0',
         'LSMinimumSystemVersion': '15.0',
         'NSHighResolutionCapable': True,
+        'NSMicrophoneUsageDescription': (
+            "SingWS Pro can read live mic levels from your mixer's USB inputs to see when singers or the host "
+            "are still using a mic. Only levels are measured; nothing is recorded. This is off unless you enable it."
+        ),
+        'NSAudioCaptureUsageDescription': (
+            "SingWS Pro can listen to its own music output to tell when a song's vocals have really finished. "
+            "Nothing is recorded or saved. This is off unless you enable it."
+        ),
         'NSAppleEventsUsageDescription': (
             "SingWS uses System Events to find, queue, and control songs in the KaraFun application."
         ),

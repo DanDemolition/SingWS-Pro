@@ -44,6 +44,10 @@ EVENT_KINDS = frozenset({
     "manual_seek",
     "gui_stall",
     "recorder_dropped",      # synthetic: overflow count
+    "observer_proposal",     # Phase 2: what an assisted transition WOULD do
+    "observer_compare",      # Phase 2: proposal vs what actually happened
+    "observer_evidence",     # Prompt 6: sound-classifier state changes (advisory)
+    "sound_health",          # Prompt 6: helper started/bypassed/restarted
 })
 
 _ALLOWED_VALUE_TYPES = (str, int, float, bool, type(None))

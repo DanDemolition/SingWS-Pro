@@ -106,10 +106,65 @@ Most of Phase 1 already existed in `transition_analysis.py` (versioned `Transiti
 - Not done / gaps: karaoke envelopes are not persisted (`to_dict` drops them for size), so no stored start/end energy snippets; `cdg_lyrics_finished()` on the transport is still unimplemented and intentionally left alone (implementing it would activate the existing lyric floor in live early-trim = behavior change; do it in Phase 3 behind its gate); schema/database migrations were not needed.
 - Rollback: delete `transition_cues.py`, its test and the tool. No data or app code depends on them.
 
+## Done — Prompt 4 / Phase 2 observer mode + replay harness (2026-09-16)
+
+Observer proposes and logs; it has **no path to playback**.
+
+- New `transition_observer.py`: `TransitionObserver(sink)` with inputs only (`song_started`, `position`, `seeked`, `bgm_started`, `song_ended`) and modes `off` / `observer` (Automatic does not exist). Proposes `bgm_fade_in` at `safe_bgm_entry` and `end_karaoke` at `safe_early_end` once per song, only at cue confidence ≥ 0.8; suspends after a manual seek; ignores stale generations and backwards monotonic time; emits `observer_proposal` and `observer_compare` (actual BGM start / song end vs proposal: `delta_s`, `saved_s`, `trigger`, `manual`, `seeked`). Sink errors are counted, never raised.
+- App wiring (`0.2.18.1.py`): module-level `_IA_OBSERVER` and `_ia_observe(owner, what, ...)` fed from karaoke start (cues via `transition_analysis_cached` → `derive_cues`; no decode, None while the cache loads), `update_time_left` position, `_karaoke_seek_seconds`, `_handle_media_end_safe`, `stop_playback`, `BackgroundMusicPlayer.fade_in`. Active only when **Record transition diagnostics** is on and `transition_observer_mode` is `observer` (default). No UI yet; logs go to the same `transition_events_*.jsonl`.
+- Replay harness: `transition_replay.py` (JSON scenarios: record + events + expect/forbid), fixtures in `test_fixtures/transition_replay/` (8: normal CDG, lyrics after instrumental, silence only, no cache, seek, manual stop, stale events, BGM delta), CLI `python tools/replay_transitions.py [--verbose]`.
+- Tests `test_transition_observer.py` (11): all fixtures; each proposal once; off mode silent; backwards clock; sink failure; low confidence; observer imports whitelist; public API inputs-only; **app feed exercised against a Mock owner whose methods are spies → zero method calls**; every `_ia_observe` call is a bare statement; event kinds registered. 37 IA tests pass in Linux VM; macOS pending.
+- Not captured: worker crash/queue overflow for the observer itself — it runs synchronously in O(1) on the existing tick, with recorder overflow already handled by Phase 0. Actual audible BGM start is approximated by `fade_in` time.
+- Needs live observation: several full shows with diagnostics on, then review proposal vs actual deltas.
+- Rollback: set `transition_observer_mode` to `off`; full revert = remove `transition_observer.py`, `transition_replay.py`, fixtures, tool, `_IA_OBSERVER`/`_ia_observe` and its call sites.
+
+## Done — Prompt 5 / classifier feasibility spike (2026-09-16, built, not measured)
+
+- Experimental SoundAnalysis probe (Swift CLI), safe Python client, labelled-clip benchmark under `experimental/sound_analysis/` (not imported by the app, not bundled; build output gitignored).
+- `sound_classes.py` + `test_sound_classes.py` (9 pass in Linux VM): Apple label → SingWS class mapping and single-window scoring.
+- `docs/intelligent_audio/MODEL_EVALUATION.md`: options ranked, M1 budgets, accuracy targets, run steps, Go/No-Go rule. **Current decision: No-Go (unmeasured).**
+- Operator decision 2026-09-16: build everything first, then test and check it all at once. So gates are recorded as *pending* rather than blocking the build, and nothing past this point gets playback authority until those checks pass.
+
+## Done — Prompt 6 / classifier into Observer only (2026-09-16, built, untested on macOS)
+
+Built ahead of the Prompt 5 Go decision at the operator's request; **`ia_sound_classifier_enabled` defaults off**, and nothing here has playback authority.
+
+- `native/sound_helper/SingWSSoundHelper.swift` + `build.sh`: separate process. **Core Audio process tap** (`CATapDescription(monoMixdownOfProcesses:)` → private aggregate device → IOProc) on the SingWS Pro PID, classified by Apple SoundAnalysis `.version1`. JSON protocol: hello (model id, protocol 1) / window / heartbeat (windows, dropped, rss) / error. Bounded: at most 8 buffers queued for analysis; older audio dropped and counted. Exits on stdin EOF (never outlives the app). `--stdin` mode for tests. Captures only; records nothing. **Not compiled or run yet** (the Linux VM can't build Swift for macOS).
+- `sound_monitor.py`: launches the helper **only while armed** on a daemon thread at nice 10. GUI-safe O(1) `arm`/`disarm`/`latest`; keeps the newest 8 windows with a sequence id; a window older than 2.5 s is never returned. Health: heartbeat timeout (3 s), error line, crash, >50 malformed lines, RSS > 200 MB, or CPU > 15 % for ~3 s → kill and restart; 3 failures → **bypassed for the session**.
+- Observer (`transition_observer.py`): `listening_window()` (15 s before the earliest cue, not after a seek), `sound()` with hysteresis (3 vocal windows at ≥ 0.6 to turn "program vocal" on, 3 non-vocal off; `uncertain` changes nothing), `sound_unavailable()`. While program vocal is active at the early-end cue it proposes `hold` instead of `end_karaoke`, then proposes the end once vocals stop. Emits `observer_evidence` on changes only; the monitor emits `sound_health`.
+- App: `_IA_SOUND`, `_ia_sound_monitor()`, `_ia_sound_configure()`; `_ia_observe` arms/disarms by listening window, feeds each window once (seq dedupe), disarms on seek/end, shuts down on quit. Helper path: bundle `_MEIPASS` or `native/sound_helper/`. Spec bundles the helper if built and adds `NSAudioCaptureUsageDescription`.
+- Note: a process tap hears the whole SingWS Pro mix (karaoke + BGM + soundboard). Near the song end that's mostly karaoke, and the observer only listens there, but BGM pre-start overlap can add music. Recorded as a known limitation.
+- Tests: `test_sound_monitor.py` (14, real subprocesses with `test_fixtures/sound_helper/fake_helper.py`: normal, disarm, stale TTL, crash → bypass, error line, missing heartbeat, malformed flood, RSS budget, missing helper, shutdown, launch failure, non-blocking GUI calls, default-off/permission/imports contracts); observer +3 sound tests, updated API and app-feed spy test (monitor mock; still zero playback calls); replay fixtures 09–11 (guide vocal holds end, uncertain changes nothing, classifier loss falls back). 63 IA tests pass in Linux VM.
+- macOS checks pending: build helper; first-run capture permission prompt; tap works on the actual output device (incl. USB mixer); CPU/RSS within MODEL_EVALUATION budgets; helper killed cleanly on quit and sleep/wake; signing/notarization with the helper bundled.
+- Rollback: setting off (no helper ever launched); full revert = remove helper, `sound_monitor.py`, observer sound methods, `_IA_SOUND` wiring and spec entries.
+
+## Done — Prompt 7 / live mic inputs design + diagnostic prototype (2026-09-16, built, untested on hardware)
+
+- Design: `docs/intelligent_audio/USB_INPUT_DESIGN.md` (Ui24R primary, Signature 10 backup, feedback prevention, UID identity, mapping, same-device clocking, loss/reconnect, permissions, states, manual checklists for both mixers).
+- `native/sound_helper/SingWSMicMeter.swift` (built by `build.sh`, bundled if built): `--list-devices`; `--device UID --channels …` → per-channel RMS/peak dB every 100 ms, heartbeat, `device_lost` / `format_changed` (then exits), stdin-EOF exit. Levels only; no audio output, no recording.
+- `mic_config.py` (presets ui24r / signature10 / signature22mtk / custom, validation, settings round-trip), `mic_activity.py` (per-role silent / active / sustained / clipping / suspect_noise / stale with hysteresis; calibration), `mic_monitor.py` (`MicMonitor` on `SoundMonitor` supervision; unplug and format change are **transient** retries that drop evidence immediately; `list_input_devices`). `sound_monitor.py` gained `_command` / `_on_row` / `_is_transient` hooks (behavior unchanged; its 14 tests still pass).
+- `mic_diagnostics_dialog.py`: Settings → **Live Mic Inputs…**: feedback/privacy warning, enable checkbox, mixer preset, device list (worker thread), role → channel spinboxes, Start/Stop Meters, meters and state text, 3 s quiet calibration, Save. Meters never start on open; closing stops the helper.
+- Settings `ia_mic_awareness_enabled` (false), `ia_mic_config`. Spec: `NSMicrophoneUsageDescription`, mic modules and helper bundled; entitlements add `com.apple.security.device.audio-input`.
+- **Not wired into the observer** (asserted by test); that's Prompt 8.
+- Tests `test_mic_input.py` (18): config presets/validation/round-trip, activity hysteresis/sustain/close/noise/clip/stale/calibration/roles, monitor with a fake meter (levels → roles, unplug resumes, format change drops evidence, bad config never launches, device listing), safety contracts (default off, permissions, import whitelist, no recording APIs in Swift, dialog doesn't auto-start, not wired to decisions). Pass in Linux VM. The dialog itself needs macOS/Qt to run.
+- Rollback: leave the setting off / don't open the dialog; full revert = remove the mic files, the settings button and handler, spec/entitlement entries.
+
+## Done — Prompt 8 / live mic evidence in observer decisions (2026-09-16, built, untested on hardware)
+
+All modes advisory; still no playback authority.
+
+- Observer (`transition_observer.py`): mic modes `off` / `observe` / `singer_protection` / `singer_protection_host_ducking` (`set_mic_mode`); `mic(roles, t_mono)` and `mic_unavailable(reason)`. Debounced presence per group with monotonic timestamps: on after 0.5 s continuous activity, off after 1.2 s quiet (minimum hold). Singers = singer1/singer2/singers (either duet mic counts); host = host. A `suspect_noise` channel is **untrusted** until it goes silent. All-stale reports or unavailability drop evidence immediately.
+- Proposals: singers active at the BGM cue → `hold_bgm`; at the early-end cue → `hold` (`singer_mic_active`); both proposed once the mics go quiet (`after_hold`). Host active at the BGM cue → `bgm_fade_in_low`. Between songs / song tail: host on → `bgm_duck`, off → `bgm_raise`. `song_end` compare adds `singer_mic_at_end` / `host_mic_at_end`. Evidence events: `singer_mic`, `host_mic`, `mic` (untrusted / trusted / unavailable).
+- App: `_IA_MIC`, `_ia_mic_configure(settings)` (session-long `MicMonitor` when `ia_mic_awareness_enabled` and config valid; restarted on dialog Save), `_ia_mic_tick()` from a new `_ia_observe(self, "tick")` at the top of `update_time_left` (O(1), once per report; state/reason changes → `mic_unavailable`). Setting `ia_mic_observer_mode` (default `singer_protection_host_ducking`); the dialog gained a "Transition suggestions" mode picker.
+- Replay fixtures 12–17: held note holds BGM and end, duet second singer keeps the hold, host talks after the performance (low entry → raise → duck), noise burst and feedback channel ignored, unplug mid-hold, stale and silent channels. 17/17 pass.
+- Tests: 46 across mic/observer/events pass in Linux VM (API whitelist and mic-feeds-observer-only contract updated).
+- Gap: no main-show-screen mic status indicator yet. Status is in the Live Mic Inputs dialog and `sound_health` log events. Add it with the M6 UI work, or sooner if wanted.
+- Rollback: `ia_mic_awareness_enabled` false (no helper) or `ia_mic_observer_mode` off.
+
 ## Added scope
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.
 
 ## Next task
 
-Run `test_transition_cues.py` on macOS and `tools/inspect_transition_cues.py` against the real library cache (after importing 1.x data); then Prompt 4 (Phase 2 observer mode + replay harness).
+Prompt 9 part 1: Assisted-mode gate document (audit only). Its Go decision needs real observer logs, so it will be recorded as No-Go/pending until the consolidated macOS + show test pass.
