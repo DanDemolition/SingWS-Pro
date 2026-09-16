@@ -29,6 +29,17 @@ LABEL_MAP: Mapping[str, str] = {
     "applause": "applause_crowd", "clapping": "applause_crowd", "cheering": "applause_crowd",
     "crowd": "applause_crowd", "chatter": "applause_crowd",
     "silence": "silence",
+    # Confirmed against the real macOS 27 label set (303 labels) on 2026-09-16.
+    # singing_bowl is a struck instrument: without this exact entry the keyword
+    # fallback sees "sing" and scores it active_vocal, which would read as a
+    # singer holding a note.
+    "singing_bowl": "music",
+    "keyboard_musical": "music", "vibraphone": "music",
+    "booing": "applause_crowd", "whistling": "applause_crowd",
+    "children_shouting": "applause_crowd",
+    "belly_laugh": "speech", "baby_laughter": "speech",
+    # Not present in the macOS 27 set, kept for other OS versions: choir,
+    # vocal_music, conversation, narration, musical_instrument.
 }
 
 KEYWORDS: Mapping[str, str] = {

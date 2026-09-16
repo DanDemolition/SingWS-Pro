@@ -11,6 +11,15 @@ import sys
 import sysconfig
 
 
+# Python 3.11+ puts THIS script's directory on sys.path, not the caller's cwd,
+# so the repo-root native extensions below are not importable when the build
+# script runs `python tools/verify_macos_arch.py` from the repo root. Add the
+# repo root explicitly rather than relying on PYTHONPATH.
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+
 RUNTIME_NATIVE_MODULES = (
     "_struct",
     "PyQt6.QtCore",
