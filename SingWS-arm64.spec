@@ -24,6 +24,10 @@ if _sound_helper.is_file():
 _mic_meter = project_root / "native" / "sound_helper" / "SingWSMicMeter"
 if _mic_meter.is_file():
     binaries.append((str(_mic_meter), "."))
+# Prompt 11 vocal-effects helper (optional): bundled only if it has been built.
+_vocal_fx = project_root / "native" / "vocal_fx" / "SingWSVocalFX"
+if _vocal_fx.is_file():
+    binaries.append((str(_vocal_fx), "."))
 
 for helper in (
     "media_helpers.py",
@@ -47,6 +51,7 @@ for helper in (
     "mic_activity.py",
     "mic_monitor.py",
     "mic_diagnostics_dialog.py",
+    "vocal_fx.py",
     "transition_analysis.py",
 ):
     helper_path = project_root / helper

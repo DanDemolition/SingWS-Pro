@@ -324,13 +324,64 @@ signing before effects reach a show. Not a blocker for VFX0.
 Seven decisions need real hardware and none should be guessed; they are listed in
 §12 of the document.
 
+## Done — Prompt 11 / VFX0 passthrough + VFX1 reverb (2026-09-16, not run on audio hardware)
+
+`native/vocal_fx/` (`vfx_dsp.c` real-time core, `vfx_engine.c` Core Audio,
+`SingWSVocalFX.swift`, `build.sh`) and `vocal_fx.py`. Helper builds arm64; the
+spec bundles it when present. Suite: **1145 passed + 51 subtests, then 86 native,
+runner exits 0.**
+
+The callback is C, as the architecture requires, and that is enforced
+structurally rather than by intent: `build.sh --test` fails if the real-time
+core's object file references any allocator, lock or I/O symbol.
+
+Verified without hardware — 13 signal tests plus 16 Python tests: starts
+bypassed and silent; **unity gain is bit-exact passthrough** (the VFX0
+deliverable); bypass fade never rises, reaches true silence, and its first
+buffer is not a hard mute; gain glides without a step; the limiter holds full
+scale; device loss and format change are transient and never counted as
+failures; repeated crashes bypass for the session; a restart restores the
+operator's setting instead of silently staying bypassed; `vocal_fx.py` cannot
+import any playback module and two monitors cannot share a failure counter.
+Real error paths were exercised: unknown device and input-only device both give
+structured errors and correct exit codes, no crash.
+
+**The stream has never run, and could not be run here.** This Mac's built-in mic
+and speakers are separate Core Audio devices; full duplex needs one device
+carrying both. No aggregate device was created on the operator's machine to fake
+it. So the audio path itself is unproven: round-trip latency, 64-frame
+stability, reverb by ear, overload under load, and unplug-during-playback are
+all unmeasured. **The latency the helper reports is arithmetic from the device's
+advertised figures, not a measurement** — treat it as a starting guess.
+
+A manual Signature 10 checklist with volume-down safety steps is at the end of
+`VOCAL_EFFECTS_ARCHITECTURE.md`. Step 1 is both Aux knobs on the USB return
+channel fully down; that is the feedback route and the only thing preventing a
+howl. Amps stay down until step 6 confirms there is none.
+
+Not done deliberately: no Settings UI and no app wiring. Prompt 11 asks for the
+helper, passthrough, bypass, diagnostics and one effect; a settings panel is
+MS6/M7 work and would have been scope creep. `vocal_fx.is_enabled()` returns
+False for absent or malformed settings, so effects are off until something
+explicitly turns them on.
+
+Rollback: delete nothing — the helper is a separate optional binary the spec
+bundles only if built, and the app has no code path that starts it yet.
+
 ## Next task
 
-Prompts 9 part 1 (No-Go) and 10 (design) are done. Next: **Prompt 11 — VFX0
-passthrough and the first wet effect**, per the staged plan in
-`VOCAL_EFFECTS_ARCHITECTURE.md` §10. VFX0 delivers a measured round-trip latency
-number, which several later decisions depend on. Prompt 12 is the final audit and
-needs 9-11.
+Prompts 9 part 1 (No-Go), 10 (design) and 11 (VFX0/VFX1 code) are done.
+
+**Prompt 12, the final integration audit, is next** — but it audits a system
+whose two newest subsystems have never run: the observer has watched no songs,
+and the effects stream has never carried audio. The audit can be written, and
+will honestly conclude that the hardware and live-show gates are all still open.
+
+The two things that actually move this forward are operator work, not code:
+1. Install the Pro build, run real songs with `ia_instrumentation_enabled` on,
+   and collect observer logs (unblocks Prompt 9 part 2).
+2. Work the Signature 10 checklist with amps down (unblocks VFX2 onward and
+   produces the real round-trip latency number).
 
 In parallel, the only thing that unblocks Prompt 9 is show data: install the Pro
 build and run real songs with `ia_instrumentation_enabled` on.

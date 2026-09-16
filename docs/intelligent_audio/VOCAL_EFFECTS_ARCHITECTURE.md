@@ -246,3 +246,82 @@ These cannot be settled from the source tree, and none should be guessed:
 6. **Signature 10 Aux bleed** — how much dry leaks into the send, which sets the
    usable wet/dry ratio on the backup path.
 7. **Whether microphone TCC survives** the current ad-hoc signing across rebuilds (§9).
+
+---
+
+# VFX0/VFX1 implementation notes (Prompt 11, 2026-09-16)
+
+Built: `native/vocal_fx/` (`vfx_dsp.c` real-time core, `vfx_engine.c` Core Audio,
+`SingWSVocalFX.swift` host process, `build.sh`) and `vocal_fx.py` (app side).
+
+**The callback is C, as §4 requires.** Swift handles argv, JSON and lifecycle
+only. This is enforced structurally, not by intent: `build.sh --test` fails if
+the real-time core's object file references any allocator, lock or I/O symbol.
+
+## Verified without hardware
+
+`./native/vocal_fx/build.sh --test` — 13 signal tests plus the symbol check:
+
+- starts bypassed and silent (nothing is ever enabled by default)
+- **unity gain is bit-exact passthrough** — the VFX0 deliverable
+- bypass fade never rises, reaches true silence, and the first bypassed buffer
+  is not a hard mute (the pop this fade exists to prevent)
+- gain changes glide with no step discontinuity (no zipper noise)
+- limiter keeps output inside full scale and counts what it squashed
+- snapshot publication, overrun accounting, and null/zero/negative frame safety
+
+`test_vocal_fx.py` — 16 tests: opt-in defaults, command construction, unknown
+effect falling back to passthrough, wet clamping, bypass, dead-pipe writes
+returning False instead of raising, device loss and format change treated as
+transient (never counted as failures), repeated crashes bypassing for the
+session, restart restoring the operator's setting rather than silently staying
+bypassed, and the isolation guards — `vocal_fx.py` may not import any playback
+module, and two monitors may not share a failure counter.
+
+Helper error paths were exercised for real: an unknown device gives
+`{"type":"error","message":"audio device not found"}` and exit 3; an input-only
+device gives `cannot bind device`. No crash in either.
+
+## NOT verified, and cannot be here
+
+**The stream has never run.** This Mac's built-in microphone and speakers are
+*separate* Core Audio devices, and full duplex needs one device carrying both.
+Nothing was faked to work around that: no aggregate device was created on the
+operator's machine, and the audio path is therefore unproven.
+
+That means unmeasured: real round-trip latency, whether 64 frames is stable,
+reverb quality by ear, overload behaviour under load, and device unplug during
+playback. **The estimated latency the helper reports is arithmetic from the
+device's advertised figures, not a measurement.** Treat it as a starting guess.
+
+## Manual test checklist — Signature 10
+
+**Speakers and amplifiers fully down before step 1. Do not raise them until
+step 6 confirms there is no feedback route.**
+
+1. **Amps down.** Signature 10 connected by USB. Both Aux knobs on the USB
+   return channel **fully down** — this is the feedback route, and it is the
+   only thing preventing a howl.
+2. Route singer mics to Aux 1, host mic to Aux 2. Confirm the dry mics still
+   reach Main L/R with the computer switched off entirely.
+3. `./native/vocal_fx/SingWSVocalFX --list-devices` and note the Signature 10 UID.
+4. `--device <UID> --channels 1,2 --frames 128 --effect none`. Confirm `hello`
+   reports the expected sample rate and channel count.
+5. Send `{"type":"params","wet":1.0,"enabled":true}`. **Still bypassed at the
+   mixer**: bring the USB return channel up only far enough to hear it at very
+   low level.
+6. **Feedback check.** Speak into a mic. Raise the return slowly. If level
+   builds on its own, stop: an Aux is feeding the return. Fix routing, restart.
+7. Only now raise amps to normal. Confirm dry is unchanged and the wet return
+   adds a duplicate of the voice at unity (VFX0 has no effect).
+8. Restart with `--effect reverb` and repeat 5–7. Reverb should be audible only
+   in the return; the dry voice must sound untouched.
+9. **Pull the USB cable mid-speech.** The wet must fade to silence and the dry
+   must be entirely unaffected. The helper should report `device_lost` and the
+   host should retry without counting a failure.
+10. Measure real round-trip if possible (a click into a mic, recorded against
+    the return) and record it — several later decisions depend on that number.
+
+Signature 10 limitation, repeated because it is easy to forget: both singers
+share Aux 1, so per-singer processing is impossible on this path. Reverb, delay
+and ducking are fine; pitch correction is not offered and must not be.

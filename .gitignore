@@ -66,3 +66,7 @@ experimental/sound_analysis/report*.json
 experimental/sound_analysis/labels.txt
 native/sound_helper/SingWSSoundHelper
 native/sound_helper/SingWSMicMeter
+
+# Vocal-effects helper build output
+native/vocal_fx/SingWSVocalFX
+native/vocal_fx/vfx_dsp_test
