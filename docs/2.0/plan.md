@@ -2,7 +2,7 @@
 
 Status: **proposed, not started.** Nothing in this plan has been built.
 
-> **Merged 2026-09-15** with `docs/intelligent_audio/ROADMAP.md` (transitions, live-mic awareness, vocal effects). Where they differ, the roadmap's safety gates and §6 below win. Platform is now **Apple Silicon, macOS 15+ only**; 1.x (0.4.7.x) keeps Intel/older macOS with bug fixes for about a year. Architecture map: `docs/intelligent_audio/ARCHITECTURE.md`.
+> **Merged 2026-09-15** with `docs/intelligent_audio/ROADMAP.md` (transitions, live-mic awareness, vocal effects). Where they differ, the roadmap's safety gates and §6 below win. Platform is now **Apple Silicon, macOS 15+ only**; 1.x (0.4.7.x) keeps Intel/older macOS and is maintained **permanently** as the free edition (decided 2026-09-16). Architecture map: `docs/intelligent_audio/ARCHITECTURE.md`.
 Drafted 2026-09-15 against `2.0` at `20c4f94` (identical to `main`, APP_VERSION `0.4.7.7`).
 
 ## Scope agreed with the operator
@@ -10,6 +10,8 @@ Drafted 2026-09-15 against `2.0` at `20c4f94` (identical to `main`, APP_VERSION 
 - AI-assisted **song transitions** and **digital mixer control**
 - **Audio AI**: stem separation, key detection, pitch
 - Inference is **local / on-device only** — no network dependency in any show path
+- **SingWS Pro is free** (decided 2026-09-16); monetization is online-only features,
+  not the app. 1.x remains the free edition permanently alongside it.
 - **Hotkeys and Elgato Stream Deck control** of app and mixer features (added 2026-09-15)
 - **UI overhaul of the host app only**; the audience/rotation screen stays as
   shipped in 0.4.7.1
@@ -53,7 +55,9 @@ plan and the reason for the sequencing below.
 only, macOS 15+. The Intel constraint below no longer applies to 2.0:
 stem separation and classification can use Core ML / the Neural Engine, though
 stems remain offline, cached, prep-time work for show safety. Budgets are
-measured against a base M1.
+measured against a base M1 (Apple silicon). The development machine is an
+**M1 Max, 10 cores, 32 GB, macOS 27**, with ~175 GB free disk — the real ceiling on
+any stems cache.
 
 ### Mixer hardware (revised)
 
@@ -86,7 +90,7 @@ board. The Ui24R also provides a multichannel USB audio interface, so the virtua
 Each milestone stops with the `AGENTS.md` report format and is independently
 testable. Nothing is built into a `.app` until the operator asks.
 
-### M0 — Release plumbing
+### MS0 — Release plumbing
 Version scheme for the beta channel (`2.0.0b1`), settings flag namespace
 (`ai_*`), a `docs/2.0/` home, and an update-manifest path that cannot offer a
 beta to a 0.4.7.x show machine. Small, entirely non-functional, de-risks the
@@ -95,42 +99,64 @@ rest.
 
 **Added 2026-09-15:** SingWS Pro branding — Pro app icon, DMG background and helper art reading "Drag SingWS Pro". Separate identity (`SingWS Pro.app`, `com.singws.pro`, `~/SingWSPro`) and own repo `DanDemolition/SingWS-Pro` are done; see `docs/intelligent_audio/HANDOFF.md`.
 
-### M1 — Key detection into the analysis pipeline
+### MS1 — Key detection into the analysis pipeline
 Add musical key + confidence to the existing per-track analysis, alongside BPM
 and loudness. Local DSP (chroma/HPCP + Krumhansl-style profile correlation over
 numpy/scipy, which are already dependencies) — no new model runtime, no new
 paid or heavyweight dependency. Cached with the existing signature keying and
-checkpoint recovery. Feeds M2, M4 and M5.
+checkpoint recovery. Feeds MS2, MS4 and MS5.
 
-### M2 — Harmonic and beat-aware transitions
+### MS2 — Harmonic and beat-aware transitions
 `transition_analysis.py` currently picks crossfade length from audio/visual
 boundaries. Extend it to also use key and beat grid: align the crossfade to the
 beat, prefer harmonically compatible neighbours when the background-music
 playlist has a choice, and adjust the curve when keys clash. Pure extension of a
 well-tested module, no UI required, flag-gated.
 
-### M3 — Offline stem separation
-Run a local separation model over library tracks as a batch job on the existing
-recyclable-helper pipeline. Stems cached to disk per track. Then a playback path
-to mute/solo them — the real payoff being an on-demand **vocal guide track for
-any MP3+G**, plus instrumental-only for confident singers. Heaviest milestone;
-splits into: model selection and offline benchmark on Intel → batch job and
-cache → playback routing → host UI control.
+### MS3 — Stem separation (revised 2026-09-16)
 
-### M4 — Pitch, key and tempo surfaced properly
+**Whole-library pre-separation is not viable.** ~130,824 tracks at even 20 MB of
+stems each is ~2.6 TB; the dev machine has ~175 GB free. Stems are therefore
+produced per song, never as a library batch.
+
+Operator-confirmed use cases are **last-minute request** (song must start within
+a second or two with stems active) and **instrumental on demand** (strip a baked-in
+guide vocal now). Both decide *before* the song starts — no mid-song stem swap is
+required, which removes the hardest case from scope.
+
+Consequences:
+
+- **Two stems suffice** (vocals / accompaniment). Faster and far smaller to cache
+  than 4-stem separation.
+- **Progressive look-ahead separation**: separate in chunks, begin playback when the
+  first chunk is ready, keep the separator ahead of the playhead — like streaming
+  transcode. Time-to-first-audio target ~1–2 s on the M1 Max.
+- **Fallback is mandatory**: if the separator falls behind the playhead, revert to
+  the original audio mid-song rather than glitch. Live-show rule.
+- **Playback path is BASS**, not mpv: synchronized multi-track mixing is what the
+  existing two-deck `BASSmix` engine already does.
+- Three tiers share one engine: pre-separated (queued songs, cached) → progressive
+  (no lead time) → cache with a size budget and oldest-first eviction.
+
+Model choice stays a measurement, not a preference: benchmark htdemucs, Open-Unmix
+and MDX-Net variants on real karaoke sources (which are unusual — often already
+instrumental, sometimes with guide vocals) for quality, speed on this machine, Core ML
+conversion viability and licence. All three are MIT.
+
+### MS4 — Pitch, key and tempo surfaced properly
 Signalsmith already does the DSP and the transport already exposes it. This
-milestone is about making it usable: suggest a key based on M1 plus the singer's
+milestone is about making it usable: suggest a key based on MS1 plus the singer's
 history, keep pitch and tempo genuinely independent in the UI, preserve per-song
 settings, and handle seek/reset cleanly. Mostly UI and state, little new DSP.
 
-### M5 — Digital mixer control
+### MS5 — Digital mixer control
 New module behind a small interface, the way `AGENTS.md` asks for DSP backends.
 Blocked on one answer from you: **which mixer, over which protocol** (see open
 questions). AI's role here is to propose gain/EQ/effect moves per singer from
 their measured history — always as a suggestion the KJ accepts, never an
 automatic change to a live board mid-song.
 
-### M7 — Command registry, hotkeys and Stream Deck (added 2026-09-15)
+### MS7 — Command registry, hotkeys and Stream Deck (added 2026-09-15)
 
 One registry of named, typed **actions** (play/pause, skip, next singer,
 BGM fade/duck, key ±, tempo ±, transitions mode, emergency bypass, soundboard
@@ -150,7 +176,7 @@ surface calls the same actions, so behaviour and safety checks live in one place
    that talks to the local API, with live key titles/icons (current singer,
    BGM level, mute state). Zero-integration fallback: Stream Deck "Hotkey"
    actions sending the SingWS keyboard shortcuts.
-5. **Mixer actions** — Ui24R actions added to the registry through M5, tested
+5. **Mixer actions** — Ui24R actions added to the registry through MS5, tested
    against the virtual Ui24R. (Bitfocus Companion also supports Soundcraft Ui
    directly; SingWS actions are for workflows that combine app + mixer.)
 
@@ -158,26 +184,50 @@ Tests: registry unit tests, shortcut conflict tests, API auth/contract tests
 with a fake client, plugin tests against a mock SingWS API. No Stream Deck
 hardware verification is claimed without a real device.
 
-### M6 — Host UI overhaul
-Last, deliberately. By this point M1–M5 have already lifted several controllers
+### MS6 — Host UI overhaul
+Last, deliberately. By this point MS1–MS5 have already lifted several controllers
 out of `KaraokeApp`, so the overhaul is re-laying-out modules rather than
 carving up a 38k-line class while also changing how it behaves. Audience screen
 untouched.
 
 ## 4. Open questions
 
-1. ~~**Which digital mixer?**~~ **Answered:** Soundcraft Ui series, not yet owned — build against a virtual mixer first. Model: **Ui24R** (multichannel USB-B audio interface + network control), so individual mic channels can reach SingWS over USB with no extra interface. Original question: Behringer X32/Wing, Soundcraft Ui, A&H, a USB
-   interface, something else? This decides OSC vs MIDI vs a vendor protocol and
-   is the only true blocker in the plan — M5 cannot start without it.
-2. **Stems: which model?** Benchmark on Apple Silicon (base M1 floor) with Core ML candidates before committing. I would
-   measure candidates on real library tracks in M3 and bring you numbers rather
-   than pick blind.
-3. **Beta distribution:** separate installer alongside 0.4.7.x, or does the 2.0
-   beta replace the show app once you are happy with it?
+1. ~~**Which digital mixer?**~~ **Answered:** Soundcraft **Ui24R** (multichannel USB-B
+   audio interface + network control), not yet owned — build against a virtual Ui
+   mixer first, and claim no hardware verification until run on a real board.
+2. ~~**Stems: which model?**~~ **Deferred, not an operator question.** Decided by
+   benchmark at MS3; see that milestone for the revised shape and criteria.
+3. ~~**Beta distribution?**~~ **Answered 2026-09-16:** SingWS Pro and 1.x live
+   alongside **permanently**. 1.x is the free edition and stays maintained —
+   Intel and older macOS indefinitely, not "about a year". Every show-critical fix
+   needs an explicit forward-port decision. Both may connect to wskar.com as host,
+   with only one actively hosting a show.
+
+### Resolved 2026-09-16 — licensing
+
+**SingWS Pro is open source and free.** Monetization is online-only features,
+which the operator has resolved legally and separately; this plan does not treat
+the app as a commercial product. That settles most of what follows:
+
+- **GPL (libmpv / IINA).** The obligation is corresponding source of the conveyed
+  work to recipients. An open-source app satisfies it by construction. Keep the
+  notices correct in the bundle.
+- **BASS (proprietary).** `vendor/bass/bass.txt:517` — free for a non-commercial
+  entity not making money from the product. A free, open-source app fits that tier.
+
+**One technical issue remains, and it is not about money or price.** A GPL work
+(mpv/IINA) linked against a proprietary library (BASS) is incompatible regardless
+of what the app itself is licensed as: the operator can grant exceptions for their
+own code, but cannot grant them for mpv's. This exists in 1.x today.
+
+**Recommended cleanup, not a blocker:** rebuild libmpv as LGPL (`--enable-lgpl`,
+excluding GPL-only components) and link dynamically. That removes the incompatibility
+outright. **Sub-task:** verify an LGPL build retains what CDG and MP4 playback need.
+Schedule alongside the arm64 framework work; do not let it gate MS0–MS2.
 
 ## 5. Recommended next step
 
-Start at **M1 (key detection)**. It is self-contained, needs no new dependency,
+Start at **MS1 (key detection)**. It is self-contained, needs no new dependency,
 feeds three later milestones, touches `KaraokeApp` barely at all, and is fully
 testable without a build. It also answers the question of how much of the
 130k-track library can be analysed in reasonable time before any heavier model
@@ -188,19 +238,19 @@ work is committed to.
 
 Each step keeps its own gate from the roadmap. AI coding-agent assignments and prompts are in `docs/intelligent_audio/ROADMAP.md`.
 
-1. **M0 — Release plumbing + platform floor**: 2.0 versioning, `ai_*`/`ia_*` flags, arm64-only, `LSMinimumSystemVersion` 15.0.
+1. **MS0 — Release plumbing + platform floor**: 2.0 versioning, `ai_*`/`ia_*` flags, arm64-only, `LSMinimumSystemVersion` 15.0.
 2. **IA Phase 0 — Transition instrumentation** (roadmap Prompt 2).
-3. **M1 — Key detection** (numpy/scipy, into existing analysis pipeline).
+3. **MS1 — Key detection** (numpy/scipy, into existing analysis pipeline).
 4. **IA Phase 1 — Finish deterministic track analysis**: much exists in `transition_analysis.py`; close gaps (CDG lyric API, MP4 tail confidence, level tap).
 5. **IA Phase 2 — Observer mode + replay harness** (Prompt 4).
 6. **Classifier spike** — SoundAnalysis first (Prompt 5), then observer integration (Prompt 6).
-7. **Virtual Soundcraft Ui mixer** — simulator + protocol contract tests; foundation for M5.
+7. **Virtual Soundcraft Ui mixer** — simulator + protocol contract tests; foundation for MS5.
 8. **USB mic awareness** (Prompts 7–8) — design against simulated devices; first real target is Ui24R multichannel USB with per-mic channels (Signature 10 Aux workaround becomes secondary).
-9. **M2 / IA Phase 5 — Harmonic, beat-aware transitions.**
+9. **MS2 / IA Phase 5 — Harmonic, beat-aware transitions.**
 10. **IA Assisted mode gate** (Prompt 9).
-11. **M3 — Offline stems** (Core ML) and **M4 — Pitch/key/tempo UI.**
+11. **MS3 — Stems** (per-song, progressive look-ahead, 2-stem, BASS mixing) and **MS4 — Pitch/key/tempo UI.**
 12. **Vocal effects** — Swift helper (Prompts 10–11).
-13. **M5 — Digital mixer control** against the virtual mixer, then real Ui hardware.
-13a. **M7 — Command registry, hotkeys, Stream Deck.** Registry + in-app hotkeys can start right after M0 (they touch little and help every later milestone); the local API and Stream Deck plugin follow; mixer actions land with M5.
-14. **M6 — Host UI overhaul.**
+13. **MS5 — Digital mixer control** against the virtual mixer, then real Ui hardware.
+13a. **MS7 — Command registry, hotkeys, Stream Deck.** Registry + in-app hotkeys can start right after MS0 (they touch little and help every later milestone); the local API and Stream Deck plugin follow; mixer actions land with MS5.
+14. **MS6 — Host UI overhaul.**
 15. **Final integration audit** (Prompt 12).

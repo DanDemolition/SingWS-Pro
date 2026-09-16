@@ -161,6 +161,58 @@ All modes advisory; still no playback authority.
 - Gap: no main-show-screen mic status indicator yet. Status is in the Live Mic Inputs dialog and `sound_health` log events. Add it with the M6 UI work, or sooner if wanted.
 - Rollback: `ia_mic_awareness_enabled` false (no helper) or `ia_mic_observer_mode` off.
 
+## Decisions and dependency upgrade — 2026-09-16
+
+All three `docs/2.0/plan.md` open questions are now closed:
+
+- **Distribution:** SingWS Pro and 1.x coexist **permanently**; 1.x is the free
+  edition, maintained indefinitely on Intel/older macOS — not "about a year".
+- **Licence:** Pro is **open source and free**; monetization is online-only
+  features, resolved separately by the operator. GPL source obligation is
+  satisfied by construction and BASS's free tier applies. Remaining item is
+  technical, not commercial: GPL mpv linked against proprietary BASS is
+  incompatible regardless of price. An LGPL libmpv rebuild is recorded as
+  **cleanup, not a blocker** — verify CDG/MP4 playback survives it.
+- **Stems (MS3):** whole-library separation is impossible (~130,824 tracks
+  ≈ 2.6 TB vs ~175 GB free), so it is per-song. The operator needs **instant
+  stems** for last-minute requests and instrumental-on-demand; both decide
+  *before* the song starts, so **no mid-song swap** is in scope and **2 stems
+  suffice**. Design: progressive look-ahead (~1–2 s to first audio), mandatory
+  fallback to the original audio if the separator falls behind, mixed through
+  the existing BASS deck engine.
+
+Milestones renamed `M0–M7` → `MS0–MS7` so they stop colliding with Apple
+silicon model names (an "M1"/"M3" ambiguity that actually caused confusion).
+
+**Qt 6.9.1 → 6.11.0** (PyQt6 6.11.0 / PyQt6-Qt6 6.11.2), numpy 2.5.1 → 2.5.3,
+scipy 1.18.0 → 1.18.1. `constraints-macos12.txt` → `constraints-macos15.txt`;
+`build_singws_mac_arm64.sh` follows it and its macOS 12 wording is corrected.
+Qt was the **only** package the old macOS 12 floor held back ("6.10.0+ requires
+13.0"); the others were already current. All 99 Qt 6.11 arm64 binaries verify at
+minos <= macOS 15.0.
+
+**Suite is identical on 6.9.1 and 6.11.0: 1129 passed, 51 subtests, 0 failures**
+(`tools/run_tests.sh`, M1 Max, macOS 27).
+
+**Rendering is NOT verified and cannot be by this suite** — live-show rule 4.
+The 6.9 → 6.11 jump can move native NSView stacking, Qt Quick surfaces and
+window geometry, all of which have regressed on this stack before. Build the app
+and look at it before trusting Qt 6.11. No build was made.
+
+### Test environment notes (2026-09-16)
+
+- `tools/run_tests.sh` runs **pytest**, not bare `unittest`; AGENTS.md said
+  otherwise and a correct venv still failed to start.
+- The long-standing "no venv can construct a QApplication" claim blamed a
+  PyQt6/PyQt6-Qt6 version split. **Wrong cause.** `/Users/daniel/Documents/SingWS/.venv`
+  is a *copied* venv whose `sys.prefix` resolves to `.venv-repair`, so Qt gets an
+  empty plugin path whatever the versions are. A fresh `qtvenv` works in both
+  offscreen and cocoa — and 6.11.0 bindings against 6.11.2 frameworks work fine,
+  which is a version split.
+- The secondary native stage still wants `.venv-universal` (mpv + pyobjc) and
+  exits 1 without it, so `run_tests.sh` returns non-zero even on a fully green
+  run. `release.sh` gates on this. **Unresolved.**
+
 ## Added scope
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.

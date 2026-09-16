@@ -347,8 +347,17 @@ that have each cost a session's worth of wrong reasoning at least once.
 **SingWS 2.0** is developed and built on an **Apple Silicon** MacBook Pro and
 targets arm64, macOS 15+ only. Do not add Intel or pre-15 compatibility code to 2.0.
 
-**SingWS 1.x (0.4.7.x)** still ships Intel and older-macOS builds for about a
-year of bug fixes. The notes below about an Intel dev Mac apply to 1.x work only:
+Measured 2026-09-16: **Apple M1 Max, 10 cores, 32 GB RAM, macOS 27**, ~175 GB free
+of 926 GB. Performance budgets in the roadmap assume a *base* M1, so this machine
+has headroom — do not quietly raise a budget because it is fast here. The free disk
+figure is the real ceiling on any stems cache.
+
+**This is no longer the Intel Mac described below.** Those notes are 1.x history,
+kept because 1.x still ships Intel builds; they are not facts about the machine
+you are running on.
+
+**SingWS 1.x (0.4.7.x)** still ships Intel and older-macOS builds and is
+maintained **permanently** as the free edition (decided 2026-09-16). The notes below about an Intel dev Mac apply to 1.x work only:
 
 arm64 binaries cannot execute on the Intel Mac — `lipo`-thinning an arm64 python
 gives "bad CPU type in executable". `build_all.sh` comments assume an Apple
@@ -367,46 +376,61 @@ claim hardware verification for mixer features.
 
 ### Running the tests
 
-    ./.venv-universal/bin/python -m unittest <module>
+    ./tools/run_tests.sh
 
-from `/Users/Daniel/Documents/SingWS/SingWS`. The system `python3` has no PyQt6
-and no `mpv`, so anything importing the app fails with ModuleNotFoundError.
-There is no pytest; the suites are plain `unittest`. Of the three venvs
-(`.venv`, `.venv-universal`, `.venv-test`), `.venv-universal` is the one the
-build scripts use as `$PYTHON`. (`.venv-intel-legacy` went with the retired
-legacy edition.)
+from the repo (or worktree) root. It creates and cleans a scratch `SINGWS_HOME`
+automatically — always required, see live-show rule 7 — and picks an interpreter,
+preferring `$ROOT/qtvenv`. **The suites run under `pytest`, not bare `unittest`.**
+Earlier revisions of this section said there was no pytest; that is wrong, and
+`run_tests.sh` will fail with `No module named pytest` if the venv lacks it.
 
-**No existing venv can construct a QApplication.** Each has a PyQt6 /
-PyQt6-Qt6 split (`.venv-universal` = bindings 6.9.0, frameworks 6.9.2), so Qt
-finds zero platform plugins and aborts — cocoa, minimal and offscreen alike.
-That silently skips the ~10 modules that build a QApplication, and one of them
-aborts `unittest discover` outright, so a plain discover run reports nothing.
-Matching versions is *not* sufficient (`.venv-test` is matched at 6.10.0 and
-still fails); build a genuinely fresh venv:
+**Building the venv (2026-09-16, verified on the M1 Max):**
 
     python3 -m venv qtvenv
-    ./qtvenv/bin/pip install PyQt6==6.9.1 PyQt6-Qt6==6.9.1 psutil requests \
-        numpy qrcode pillow scipy
+    ./qtvenv/bin/pip install -c constraints-macos15.txt PyQt6 psutil requests \
+        numpy qrcode pillow scipy pytest
 
-That runs the suite green apart from four modules that need packages it does
-not carry: `test_karaoke_engine_selection` and `test_libmpv_background_engine`
-(need `mpv`), `test_mac_keep_awake` (needs pyobjc), and `test_phrase_detect`
-(needs the `mpv`-backed decode path). Run those four in `.venv-universal`,
-where all of them pass. Between the two venvs the suite is fully coverable.
+`constraints-macos15.txt` is the pin set the arm64 build enforces, so the test
+venv and the build agree. It replaced `constraints-macos12.txt` on 2026-09-16:
+that file existed only to hold the macOS 12 floor for 1.x, and the floor was the
+sole reason Qt was pinned to 6.9.1. 2.0 runs **Qt 6.11**.
 
-**These four failures are the environment, not the code.** They have been
-re-investigated as suspected regressions more than once. Before blaming a
-change for any of them, re-run that module under `.venv-universal`:
+**A fresh venv constructs a QApplication in both `offscreen` and `cocoa`.**
+The long-standing claim that *no* venv could — blamed here for a long time on a
+PyQt6 / PyQt6-Qt6 version split — was wrong about the cause. The real cause is
+**copied venvs**: `/Users/daniel/Documents/SingWS/.venv` reports
+`sys.prefix = .../.venv-repair` and loads PyQt6 from that other directory, so Qt
+resolves its plugin path to `""` and finds nothing, whatever the versions are.
+Matching versions was never the issue. Do not copy or rename a venv directory;
+build a new one. That checkout now holds 13 assorted `.venv*` directories of
+unknown provenance — prefer a fresh `qtvenv` in the worktree you are working in.
 
-    SINGWS_HOME=$(mktemp -d) ./.venv-universal/bin/python -m unittest \
-        test_phrase_detect test_mac_keep_awake test_libmpv_background_engine
+**A fresh worktree needs two symlinks**, or ~13 tests fail for reasons that have
+nothing to do with your change (`bundled libmpv is unavailable`, and PHP
+`Failed opening required .../SingWS-Server/...`). Both targets are gitignored or
+untracked, so `git worktree add` does not bring them:
 
-`test_phrase_detect` is the misleading one — it fails on an assertion
-(`0.0 != 1.0`) rather than an ImportError, because the decode path degrades
-silently to zero instead of raising. The shipped .app is unaffected; it bundles its own Qt.
+    ln -sfn /Users/daniel/Documents/SingWS/native_dual_view/Frameworks \
+        native_dual_view/Frameworks      # 59 arm64 mpv dylibs, 38 MB
+    ln -sfn /Users/daniel/Documents/SingWS/SingWS-Server SingWS-Server
 
-Always run with a scratch `SINGWS_HOME` (see live-show rule 7);
-`tools/run_tests.sh` now creates and cleans one automatically.
+**Recorded baseline — branch `2.0` at the MS0 foundation, 2026-09-16:**
+**1045 passed, 2 failed, 34 subtests, ~66 s.** Identical on Qt 6.9.1 and Qt 6.11.0,
+so the Qt upgrade moved nothing the suite can see — but see the rendering caveat
+in `constraints-macos15.txt`: it cannot see rendering at all. The two failures are pre-existing
+test debt that fails identically on `main`, so they are not a 2.0 regression:
+
+- `test_karafun_fullscreen.py::FullscreenTests::test_failed_verification_does_not_claim_success_or_click_again`
+- `test_rotation_tv_design.py::RotationTvDesignTests::test_decorative_rotation_effects_pause_during_karaoke`
+
+Before blaming a change for either, run it against `main` the same way first.
+
+**Source-text assertions break on renames.** Several tests `.index()` literal
+source strings and fail with `ValueError: substring not found` rather than
+anything descriptive. The SingWS Pro rename broke two this way
+(`setApplicationName("SingWS")` → `APP_DISPLAY_NAME`, and the `~/SingWS` →
+`~/SingWSPro` data folder). Expect more when renaming; they are stale tests, not
+behaviour regressions.
 
 ### The CDG timing offset is wired but NOT calibrated
 

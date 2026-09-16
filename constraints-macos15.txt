@@ -1,0 +1,42 @@
+# Verified pin set for the SingWS Pro 2.0 arm64 build (macOS 15+).
+#
+# Supersedes constraints-macos12.txt, which existed only to hold binaries at the
+# macOS 12 floor for the single Intel 1.x build. 2.0 is arm64 / macOS 15+ only,
+# so the constraint that forced Qt down to 6.9.1 — "6.10.0+ requires 13.0" — no
+# longer applies. 1.x keeps its own macOS 12 pin set on `main`.
+#
+# Verified 2026-09-16 on the M1 Max (macOS 27):
+#
+#   Package        Pinned    Highest binary minos   Notes
+#   -----------    -------   --------------------   ---------------------------
+#   numpy          2.5.3     <= 15.0                latest release
+#   scipy          1.18.1    <= 15.0                latest release
+#   PyQt6          6.11.0    <= 15.0                latest; was held at 6.9.1
+#   PyQt6-Qt6      6.11.2    <= 15.0                resolved by PyQt6 6.11.0
+#   Python         3.14      10.15                  no change needed
+#
+# Qt 6.11's 99 arm64 Mach-O files were checked with the repo's own tool:
+#   tools/verify_macos_min_version.py <site-packages>/PyQt6/Qt6/lib \
+#       --arch arm64 --maximum 15.0
+#   -> verified 99 Mach-O file(s): arm64 minimum <= macOS 15.0
+#
+# The full suite passes identically on 6.9.1 and 6.11.0: 1045 passed, 2 failed
+# (both pre-existing on main), 34 subtests.
+#
+# NOT VERIFIED BY TESTS: rendering. Live-show rule 4 — aspect ratio, native view
+# stacking, Qt Quick surfaces and window geometry cannot be validated by the
+# suite, and the 6.9 -> 6.11 jump is exactly the kind of change that moves them.
+# The ticker / mpv NSView ordering in particular has broken on this stack before.
+# Build the app and look at it on screen before trusting Qt 6.11 in a show.
+#
+# CRITICAL, unchanged from the 1.x note: pinning the VERSION is not enough.
+# numpy and scipy publish several macOS wheels per version, and a plain
+# `pip install` can pick a variant with a higher deployment target than the
+# bundle allows. build_singws_mac_arm64.sh checks the finished bundle against
+# --maximum 15.0, so a wrong-variant install fails the build rather than
+# shipping. Re-verify after any bump with the command above.
+
+numpy==2.5.3
+scipy==1.18.1
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.2

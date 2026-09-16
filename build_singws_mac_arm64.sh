@@ -27,7 +27,7 @@ fi
 
 for required in \
     "$ENTRY" "$SPEC" "$PYTHON" \
-    mpv_karaoke_transport.py MoltenVK_icd.json constraints-macos12.txt \
+    mpv_karaoke_transport.py MoltenVK_icd.json constraints-macos15.txt \
     SingWS.entitlements dmg_settings.py tools/verify_macos_arch.py \
     tools/verify_macos_min_version.py; do
     [[ -e "$required" ]] || { echo "Missing required file: $required"; exit 1; }
@@ -55,15 +55,16 @@ done
 "$PYTHON" tools/verify_macos_arch.py --runtime --require arm64
 "$PYTHON" -c "import PyQt6"
 
-# This build is intended to cover macOS 12 and above, retiring the separate
-# legacy edition. PyQt6/Qt6 6.10+ raise the floor to macOS 13 while carrying a
-# "macosx_10_14" wheel tag, so the tag cannot be trusted -- check the installed
-# versions against the verified pin set instead.
+# SingWS Pro 2.0 targets macOS 15 and above, arm64 only. Wheel tags cannot be
+# trusted to report a real deployment target (PyQt6 has shipped a
+# "macosx_10_14" tag over binaries requiring 13.0), so check the installed
+# versions against the verified pin set instead, and the finished bundle
+# against tools/verify_macos_min_version.py --maximum 15.0 below.
 "$PYTHON" - <<'PYPINS'
 import re, sys
 from importlib.metadata import PackageNotFoundError, version
 wanted = {}
-for line in open("constraints-macos12.txt", encoding="utf-8"):
+for line in open("constraints-macos15.txt", encoding="utf-8"):
     line = line.split("#", 1)[0].strip()
     if not line:
         continue
@@ -77,14 +78,14 @@ for name, pin in wanted.items():
         bad.append(f"{name}: not installed (need {pin})")
         continue
     if found != pin:
-        bad.append(f"{name}: {found} installed, macOS 12 build needs {pin}")
+        bad.append(f"{name}: {found} installed, macOS 15 build needs {pin}")
 if bad:
-    print("Dependency versions break macOS 12 support:")
+    print("Dependency versions break macOS 15 support:")
     for line in bad:
         print(f"  {line}")
-    sys.exit("Install the pinned set: pip install -c constraints-macos12.txt "
+    sys.exit("Install the pinned set: pip install -c constraints-macos15.txt "
              + " ".join(wanted))
-print(f"macOS 12 dependency pins verified: "
+print(f"macOS 15 dependency pins verified: "
       + ", ".join(f"{n}=={v}" for n, v in sorted(wanted.items())))
 PYPINS
 
