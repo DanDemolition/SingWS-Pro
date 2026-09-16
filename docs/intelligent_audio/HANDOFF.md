@@ -284,11 +284,53 @@ song to start the rotation." at a 1192 px window width — plain QLabels with no
 wrap or elide. Text metrics are identical on Qt 6.9 and 6.11, so it is a
 pre-existing layout squeeze, not a Qt regression.
 
+## Done — Prompt 10 / vocal-effects architecture (2026-09-16, design only)
+
+`docs/intelligent_audio/VOCAL_EFFECTS_ARCHITECTURE.md`. No effects code written.
+
+Two corrections to the roadmap brief, both deliberate:
+
+- **Hardware order reversed.** The brief describes a "Primary Signature 10 signal
+  path"; Prompt 7 already decided Ui24R primary / Signature 10 backup, and that
+  still holds. The Signature 10 is designed for as a first-class fallback because
+  it is the mixer that actually exists — the Ui24R is still not owned.
+- **The render callback cannot be Swift.** The brief says "Swift helper using
+  AVAudioEngine". The process should be Swift; the callback must not be — ARC can
+  retain/release, allocate and lock on any object touch. Recommendation is a HAL
+  I/O AudioUnit with a C render callback, hosting Apple AUs via `AudioUnitRender`.
+  AVAudioEngine may build the graph but must not own the callback.
+
+Design summary: wet-only return, so the dry voice never passes through the
+computer and a helper crash costs the effect, never the vocal. Separate process
+and — importantly — its **own supervisor instance**, not `SoundMonitor`'s, so a
+classifier stall cannot couple into the effects failure counter. Parameters cross
+into the callback as an atomically published immutable snapshot. Apple AUs cover
+reverb, delay and EQ; **macOS ships no chorus AU**, so chorus/doubling needs a
+small modulated delay line of our own (~40 lines of C, no dependency).
+
+The latency finding that drives the plan: wet sums acoustically with dry, so
+round-trip delay is a fixed comb filter on the combined signal. Reverb and
+slapback are indifferent to that; **chorus/doubling may be unusable** and is
+gated on a by-ear validation on real hardware. Stages: VFX0 passthrough (unity
+gain, measured round-trip) → VFX1 reverb → VFX2 supervision → VFX3 delay+tempo
+→ VFX4 ducking → VFX5 chorus (may be abandoned).
+
+**Signing problem, stated rather than deferred:** the brief asks for hardened
+runtime and notarization; the build ad-hoc signs and does not notarize. Today's
+location finding is the proof of consequence — TCC grants do not survive ad-hoc
+re-signed rebuilds, and an effects helper needs microphone permission. Resolve
+signing before effects reach a show. Not a blocker for VFX0.
+
+Seven decisions need real hardware and none should be guessed; they are listed in
+§12 of the document.
+
 ## Next task
 
-Prompt 9 part 1 is done (No-Go). Next: **Prompt 10 — vocal-effects architecture**,
-which is independent of show data and is the largest remaining code chunk. Prompt
-11 implements the first effect; Prompt 12 is the final audit and needs 9-11.
+Prompts 9 part 1 (No-Go) and 10 (design) are done. Next: **Prompt 11 — VFX0
+passthrough and the first wet effect**, per the staged plan in
+`VOCAL_EFFECTS_ARCHITECTURE.md` §10. VFX0 delivers a measured round-trip latency
+number, which several later decisions depend on. Prompt 12 is the final audit and
+needs 9-11.
 
 In parallel, the only thing that unblocks Prompt 9 is show data: install the Pro
 build and run real songs with `ia_instrumentation_enabled` on.
