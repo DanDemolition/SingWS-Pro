@@ -155,6 +155,12 @@ a = Analysis(
     datas=extra_datas,
     hiddenimports=[
         'mutagen',
+        # Imported lazily inside the venue-location helper (0.2.18.1.py), so
+        # PyInstaller's static analysis never sees it and the frozen app fell
+        # back to "CoreLocation is not available" -- location detection was
+        # silently dead in the bundle.
+        'CoreLocation',
+        'Foundation',
         'media_helpers',
         'libmpv_media_jobs',
         'libmpv_background_engine',

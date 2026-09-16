@@ -45,3 +45,9 @@ PyQt6-Qt6==6.11.2
 # a missing mutagen and returns 0.0 for every file, which silently disables
 # trailing-silence detection; the spec lists it as a hiddenimport.
 mutagen==1.48.1
+
+# macOS location detection. The import is lazy, so it is also a spec
+# hiddenimport; without both, the frozen app reports "CoreLocation is not
+# available" and venue location silently never resolves.
+pyobjc-framework-CoreLocation==12.2.2
+pyobjc-framework-Cocoa==12.2.2
