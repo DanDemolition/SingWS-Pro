@@ -228,6 +228,67 @@ and look at it before trusting Qt 6.11. No build was made.
 
 - M7 hotkeys / Stream Deck / command registry — see `docs/2.0/plan.md`.
 
+## Done — Prompt 9 part 1 / Assisted-mode gate audit (2026-09-16)
+
+`docs/intelligent_audio/ASSISTED_MODE_GATE.md`. **Decision: NO-GO**, as the
+roadmap requires when evidence is incomplete — and it is entirely absent. The
+audit is meant to read a representative sample of exported observer logs; there
+are none anywhere under `~/SingWS` or `~/SingWSPro`, because until 2026-09-16
+no build of SingWS Pro existed that could run, so the observer has never watched
+a song. The 17 replay scenarios pass, but they prove the logic matches its design,
+not that the design matches a real room.
+
+The document records the criteria anyway so data collection can be aimed at them:
+approved scope limited to dead-air removal after lyrics **and** audio have ended;
+classifier and mic evidence may veto an action but never justify one; lyrics
+outrank silence unconditionally; the observer's no-playback-access property is
+not relaxed (Assisted must be a separate consumer, not the observer calling the
+transport); rollback must be a settings change, never a rebuild.
+
+**Do not run the Prompt 9 implementation prompt.** It stops on a No-Go gate by
+design. What moves it to Go: install a Pro build, run real shows in observer mode,
+review proposals against outcomes — especially the false-early-end rate, the one
+that cuts a singer off in front of a room — then re-run the audit.
+
+## First SingWS Pro build (2026-09-16)
+
+The app had never been built from this repo. It builds, launches and renders now:
+Qt 6.11.0, 903 ms startup, host window correct, audience ticker drawing above the
+video surface, no errors and no crash report. Scratch `SINGWS_HOME`; nothing
+touched `/Applications` or 1.x data. DMG `SingWS-Pro-2.0.0.0-arm64-installer.dmg`.
+
+Build blockers fixed: the mpv bridge dylib and both Swift helpers had never been
+compiled; `tools/verify_macos_arch.py` failed because Python 3.11+ sets
+`sys.path[0]` to the script's own directory, so repo-root native modules were not
+importable.
+
+Two runtime dependencies were silently missing from the bundle, both the same
+shape — a lazy import, a quiet fallback, and no test touching the real dependency:
+
+- **mutagen** (fixed earlier): `probe_duration_seconds` returned 0.0 for every
+  file, disabling trailing-silence detection.
+- **CoreLocation**: imported lazily inside the venue-location helper, so
+  PyInstaller never saw it. The frozen app took the "CoreLocation is not
+  available" branch every time. Now a spec hiddenimport and pinned.
+
+**Worth a follow-up:** that pattern has now bitten twice in one day. These
+fallbacks should log loudly, not silently.
+
+Separately, the **1.x show app is not affected** by the CoreLocation fix — it
+already bundles it. Its logs show `authorization_status=0` /
+`kCLErrorDomain Code=1`: macOS has never authorized it for location. That is an
+operator grant in System Settings, and ad-hoc re-signed rebuilds do not inherit it.
+
+Found and not fixed: the rotation card clips "No singer is active" and "Queue a
+song to start the rotation." at a 1192 px window width — plain QLabels with no
+wrap or elide. Text metrics are identical on Qt 6.9 and 6.11, so it is a
+pre-existing layout squeeze, not a Qt regression.
+
 ## Next task
 
-Prompt 9 part 1: Assisted-mode gate document (audit only). Its Go decision needs real observer logs, so it will be recorded as No-Go/pending until the consolidated macOS + show test pass.
+Prompt 9 part 1 is done (No-Go). Next: **Prompt 10 — vocal-effects architecture**,
+which is independent of show data and is the largest remaining code chunk. Prompt
+11 implements the first effect; Prompt 12 is the final audit and needs 9-11.
+
+In parallel, the only thing that unblocks Prompt 9 is show data: install the Pro
+build and run real songs with `ia_instrumentation_enabled` on.
