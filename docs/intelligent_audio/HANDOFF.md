@@ -406,6 +406,28 @@ VFX0's own deliverable does not exist; (4) the logging queue at `0.2.18.1.py:264
 is still an unbounded `SimpleQueue`; (5) `vfx_*` keys are absent from `DEFAULTS`,
 so effects settings would not persist once a UI lands.
 
+## MS1 key detection — built, measured, and gated off (2026-09-16)
+
+`key_detect.py` (20 tests) and `tools/validate_key_detect.py`. **The detector
+does not work on real audio and is disabled**: `VALIDATED = False`, and
+`is_usable()` returns False unconditionally, so MS2/MS4/MS5 cannot act on a key
+even if written before the fix lands. A test asserts that, so turning it on is a
+deliberate change.
+
+The durable result is the harness. Calibration looked like it needed someone to
+name keys by ear; it does not. The harness pitch-shifts real tracks by a known
+amount and requires the tonic to move by exactly that much — the shift is the
+ground truth. Measured: **shift tracking 4/15, octave invariance fails** (±12
+semitones preserves every pitch class, yet G major read as E minor and C major).
+Synthetic tests pass, so the method works on clean tones and fails on real mixes;
+the chroma responds to spectral tilt rather than pitch content. One fix attempt
+(band-limited, log-compressed, whitened chroma) improved octave invariance to 5/6
+but dropped shift tracking to 1/15, so tuning was stopped rather than continued
+against a three-track sample.
+
+Speed is not the problem: 0.44 s/track, about 4 h for the 130,824-track library
+on the existing four workers.
+
 ## Next task
 
 Prompts 9 part 1 (No-Go), 10 (design) and 11 (VFX0/VFX1 code) are done.

@@ -101,8 +101,9 @@ rest.
 
 ### MS1 — Key detection into the analysis pipeline
 
-**Status 2026-09-16: detector built (`key_detect.py`, 19 tests). Not yet wired
-into the batch pipeline, and thresholds are uncalibrated — see below.**
+**Status 2026-09-16: detector built and then MEASURED TO FAIL on real audio.
+`key_detect.VALIDATED` is False and `is_usable()` returns False unconditionally,
+so nothing can act on a key. MS2, MS4 and MS5 are blocked on fixing this.**
 
 Smaller than planned, because `phrase_detect` already had `_stft_mag()` and
 `_chroma()`; MS1 reuses them rather than growing a second spectral stack. No new
@@ -123,12 +124,34 @@ Two findings from real audio:
   strong `fit` (0.58-0.80). `fit` is the better discriminator of "is this track
   tonal at all".
 
-**Not validated for correctness.** Three tracks is a sample, not a calibration,
-and no ground truth was available — none of the sampled archives carried a
-`TKEY` tag. What *is* verified: transposition invariance (synthetic), and
-stability (both halves and the full track agreed on 3/3 real tracks).
-`MIN_CONFIDENCE` and `MIN_FIT` are provisional. **Calibrate against known-key
-tracks before MS2, MS4 or MS5 acts on a key.**
+### Validation, and the negative result
+
+Calibration first looked like it needed a human naming keys by ear. It does not.
+`tools/validate_key_detect.py` **pitch-shifts real library tracks by a known
+amount and requires the detected tonic to move by exactly that much** — the
+shift is the ground truth, so no known-key song list is needed, and it runs on
+real mixes rather than synthetic tones. The harness is the durable result of MS1
+and any future attempt should be measured with it.
+
+Measured on real audio:
+
+| Property | Result |
+|---|---|
+| Shift tracking (tonic moves by N) | **4/15** |
+| Octave invariance (±12 changes nothing) | **Fails** — G major read as E minor and C major |
+
+The synthetic tests pass, including transposition invariance, so the method
+works on clean tones and falls apart on real mixes. Cause: the chroma sums raw
+magnitude across the spectrum, so **spectral tilt moves the answer, not pitch
+content**. A band-limited, log-compressed, whitened chroma was tried — octave
+invariance improved to 5/6 but shift tracking fell to 1/15, so it is not a quick
+fix and tuning was stopped rather than continued against a three-track sample.
+
+Options for the next attempt, in rough order of cost: a constant-Q or HPCP-style
+chroma with proper octave folding and per-octave normalisation; beat-synchronous
+averaging so sustained bass stops dominating; or accepting a vetted open-source
+key detector if one exists with a compatible licence. Whichever is chosen, the
+bar is the harness above at or near 100%, not a plausible-looking answer.
 Add musical key + confidence to the existing per-track analysis, alongside BPM
 and loudness. Local DSP (chroma/HPCP + Krumhansl-style profile correlation over
 numpy/scipy, which are already dependencies) — no new model runtime, no new

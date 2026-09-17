@@ -25,6 +25,29 @@ import numpy as np
 
 KEY_ANALYZER_VERSION = 1
 
+# MEASURED FAILURE, 2026-09-16. Do not let anything act on a detected key.
+#
+# Validated with tools/validate_key_detect.py, which pitch-shifts real library
+# tracks by a known amount and requires the detected tonic to move by exactly
+# that much (the shift is the ground truth, so no known-key song list is needed).
+# Results on real audio:
+#
+#   shift tracking      4/15
+#   octave invariance   FAILS -- +/-12 semitones preserves every pitch class,
+#                       yet G major was detected as E minor and C major
+#
+# The synthetic tests in test_key_detect.py pass, including transposition
+# invariance, so the method works on clean tones and falls apart on real mixes.
+# The cause is that the chroma sums raw magnitude across the spectrum, so
+# spectral tilt -- not pitch content -- moves the result. A band-limited,
+# log-compressed, whitened chroma was tried: octave invariance improved to 5/6
+# but shift tracking dropped to 1/15, so it is not a quick fix.
+#
+# This module is kept as a foundation and a harness, not as a working detector.
+# MS2 (harmonic transitions), MS4 (pitch suggestions) and MS5 (mixer presets)
+# must not consume it until VALIDATED is True.
+VALIDATED = False
+
 PITCH_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 # Krumhansl-Kessler probe-tone profiles.
@@ -184,6 +207,11 @@ def is_usable(result: Optional[KeyResult], min_confidence: float = MIN_CONFIDENC
     """Whether a result is worth acting on: a key has to fit the track at all
     (`fit`) *and* beat the nearest genuinely different key (`confidence`).
     Consumers should gate on this, never on `result is not None`."""
+    if not VALIDATED:
+        # The detector does not track pitch shifts on real audio (see the note
+        # by KEY_ANALYZER_VERSION). Refusing here means a consumer written
+        # before the fix lands cannot silently act on a wrong key.
+        return False
     return (result is not None
             and result.fit >= float(min_fit)
             and result.confidence >= float(min_confidence))

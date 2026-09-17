@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -121,12 +122,19 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(kd.KeyResult(tonic, "major", 1.0).camelot[:-1],
                              kd.KeyResult(rel_minor, "minor", 1.0).camelot[:-1])
 
-    def test_is_usable_requires_both_fit_and_confidence(self):
-        self.assertFalse(kd.is_usable(None))
-        self.assertFalse(kd.is_usable(kd.KeyResult(0, "major", 0.0, fit=0.9)))
-        self.assertFalse(kd.is_usable(kd.KeyResult(0, "major", 0.9, fit=0.1)),
-                         "a high margin over a poor fit is still a poor fit")
-        self.assertTrue(kd.is_usable(kd.KeyResult(0, "major", 0.9, fit=0.9)))
+    def test_nothing_is_usable_while_the_detector_is_unvalidated(self):
+        """Measured 4/15 on real-audio shift tracking, and it fails octave
+        invariance. Until that is fixed, no consumer may act on a key."""
+        self.assertFalse(kd.VALIDATED)
+        self.assertFalse(kd.is_usable(kd.KeyResult(0, "major", 0.99, fit=0.99)))
+
+    def test_fit_and_confidence_gate_once_validated(self):
+        with mock.patch.object(kd, "VALIDATED", True):
+            self.assertFalse(kd.is_usable(None))
+            self.assertFalse(kd.is_usable(kd.KeyResult(0, "major", 0.0, fit=0.9)))
+            self.assertFalse(kd.is_usable(kd.KeyResult(0, "major", 0.9, fit=0.1)),
+                             "a high margin over a poor fit is still a poor fit")
+            self.assertTrue(kd.is_usable(kd.KeyResult(0, "major", 0.9, fit=0.9)))
 
     def test_relative_key_round_trips(self):
         for tonic in range(12):
