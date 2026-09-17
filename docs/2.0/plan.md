@@ -100,6 +100,35 @@ rest.
 **Added 2026-09-15:** SingWS Pro branding — Pro app icon, DMG background and helper art reading "Drag SingWS Pro". Separate identity (`SingWS Pro.app`, `com.singws.pro`, `~/SingWSPro`) and own repo `DanDemolition/SingWS-Pro` are done; see `docs/intelligent_audio/HANDOFF.md`.
 
 ### MS1 — Key detection into the analysis pipeline
+
+**Status 2026-09-16: detector built (`key_detect.py`, 19 tests). Not yet wired
+into the batch pipeline, and thresholds are uncalibrated — see below.**
+
+Smaller than planned, because `phrase_detect` already had `_stft_mag()` and
+`_chroma()`; MS1 reuses them rather than growing a second spectral stack. No new
+dependency. Method is Krumhansl-Kessler profile correlation over an averaged,
+per-frame-normalised chroma.
+
+Measured on real library tracks: **0.44 s/track**, so the full 130,824-track
+library is about 16 h single-threaded or **~4 h on the existing 4 workers**.
+
+Two findings from real audio:
+
+- **The runner-up is almost always the relative key** (G major 0.801 vs E minor
+  0.701; B minor 0.749 vs D major 0.739). Relative keys share all seven pitch
+  classes, so chroma cannot separate them and scoring against the runner-up made
+  confidence meaningless. Confidence is now measured against the best genuinely
+  different key, with `relative_margin` reported separately.
+- **Confidence is inherently small** for this method (~0.12-0.15) even with a
+  strong `fit` (0.58-0.80). `fit` is the better discriminator of "is this track
+  tonal at all".
+
+**Not validated for correctness.** Three tracks is a sample, not a calibration,
+and no ground truth was available — none of the sampled archives carried a
+`TKEY` tag. What *is* verified: transposition invariance (synthetic), and
+stability (both halves and the full track agreed on 3/3 real tracks).
+`MIN_CONFIDENCE` and `MIN_FIT` are provisional. **Calibrate against known-key
+tracks before MS2, MS4 or MS5 acts on a key.**
 Add musical key + confidence to the existing per-track analysis, alongside BPM
 and loudness. Local DSP (chroma/HPCP + Krumhansl-style profile correlation over
 numpy/scipy, which are already dependencies) — no new model runtime, no new

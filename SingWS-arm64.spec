@@ -52,6 +52,7 @@ for helper in (
     "mic_monitor.py",
     "mic_diagnostics_dialog.py",
     "vocal_fx.py",
+    "key_detect.py",
     "transition_analysis.py",
 ):
     helper_path = project_root / helper
