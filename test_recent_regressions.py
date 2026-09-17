@@ -69,6 +69,26 @@ class FakeSingleShotTimer:
 
 
 class RecentRegressionTests(unittest.TestCase):
+
+    def test_missing_mutagen_is_reported_not_silently_zero(self):
+        """probe_duration_seconds returns 0.0 for an unreadable file, which is
+        fine, and used to return 0.0 for EVERY file when mutagen was missing,
+        which silently disabled trailing-silence detection. The dependency
+        failure must be logged; per-file failures stay quiet."""
+        import importlib
+        import logging
+        import media_helpers
+
+        importlib.reload(media_helpers)
+        with mock.patch.dict("sys.modules", {"mutagen": None}):
+            with self.assertLogs(level=logging.ERROR) as captured:
+                self.assertEqual(media_helpers.probe_duration_seconds("/any.mp3"), 0.0)
+            self.assertTrue(any("mutagen" in line for line in captured.output))
+            self.assertFalse(media_helpers.dependency_status()["mutagen"])
+            # Reported once, not per file.
+            media_helpers.probe_duration_seconds("/another.mp3")
+        importlib.reload(media_helpers)
+        self.assertTrue(media_helpers.dependency_status()["mutagen"])
     @classmethod
     def setUpClass(cls):
         cls.singws = load_main_module()

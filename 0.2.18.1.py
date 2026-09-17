@@ -2599,6 +2599,40 @@ def flush_log_queue(timeout_sec: float = 2.0) -> None:
         pass
 
 
+# The log queue used to be an unbounded queue.SimpleQueue. Logging is async so
+# the GUI thread never blocks on a write, but unbounded means a burst -- a
+# runaway retry loop, a scan logging per-track failures -- grows memory with no
+# ceiling. ARCHITECTURE.md flagged it and the final audit kept it open as a
+# release blocker. Bounded with an explicit drop policy instead: newest records
+# are dropped when full, the count is kept, and the total is reported as soon as
+# there is room, so a burst is visible in the log rather than silent.
+_LOG_QUEUE_MAX = 10000
+
+
+class _BoundedLogQueueHandler(logging.handlers.QueueHandler):
+    def __init__(self, log_queue):
+        super().__init__(log_queue)
+        self.dropped = 0
+
+    def enqueue(self, record):
+        try:
+            self.queue.put_nowait(record)
+        except queue.Full:
+            self.dropped += 1
+            return
+        if self.dropped:
+            # There is room again: report the gap before anything else, so the
+            # log says what it lost rather than quietly skipping it.
+            dropped, self.dropped = self.dropped, 0
+            try:
+                self.queue.put_nowait(logging.LogRecord(
+                    name="singws.logging", level=logging.WARNING, pathname=__file__,
+                    lineno=0, msg="[LOG] dropped %d record(s): queue full (max %d)",
+                    args=(dropped, _LOG_QUEUE_MAX), exc_info=None))
+            except queue.Full:
+                self.dropped += dropped
+
+
 def setup_logging():
     """Setup comprehensive logging system"""
     # Create log filename with today's date
@@ -2646,8 +2680,8 @@ def setup_logging():
 
     if sinks:
         try:
-            log_queue = queue.SimpleQueue()
-            queue_handler = logging.handlers.QueueHandler(log_queue)
+            log_queue = queue.Queue(maxsize=_LOG_QUEUE_MAX)
+            queue_handler = _BoundedLogQueueHandler(log_queue)
             queue_handler._singws_queue_handler = True
             queue_handler._singws_file_handler = any(
                 bool(getattr(h, "_singws_file_handler", False)) for h in sinks
@@ -3691,6 +3725,14 @@ DEFAULTS = {
     "ia_sound_classifier_enabled": False,  # Prompt 6: Apple SoundAnalysis helper feeds the observer (advisory only)
     "transition_observer_mode": "observer",  # off | observer. Observer only logs proposals (needs ia_instrumentation_enabled)
     "ia_instrumentation_enabled": False,  # Phase 0: passive transition event log (logs/transition_events_*.jsonl)
+    # Prompt 11 vocal effects. Wet-only; the dry voice never enters the computer.
+    # Present so the operator's choices persist; nothing starts the helper yet.
+    "vfx_enabled": False,
+    "vfx_device_uid": "",
+    "vfx_channels": [],       # 1-based mixer USB channels
+    "vfx_frames": 128,        # 64 or 128
+    "vfx_effect": "none",     # none (VFX0 passthrough) | reverb (VFX1)
+    "vfx_wet": 1.0,           # 0.0 .. 4.0 linear
     "seamless_transitions_enabled": True,  # master safety switch; OFF preserves normal physical EOS behavior
     "karaoke_bgm_crossfade_enabled": False, # allow intentional karaoke -> BGM overlap at song end
     "karaoke_trim_verified_tail": True,    # end promptly once the file scan confirms all audio has ended

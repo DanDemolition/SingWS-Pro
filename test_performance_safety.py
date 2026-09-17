@@ -926,9 +926,45 @@ class PerformanceSafetyTests(unittest.TestCase):
         setup = MAIN_SOURCE[
             MAIN_SOURCE.index("def setup_logging"):MAIN_SOURCE.index("# Initialize logging")
         ]
-        self.assertIn("logging.handlers.QueueHandler", setup)
+        # The handler subclasses QueueHandler; assert the behaviour, not the
+        # spelling, so a rename does not read as a regression.
+        self.assertIn("_BoundedLogQueueHandler(log_queue)", setup)
         self.assertIn("logging.handlers.QueueListener", setup)
         self.assertIn("listener.start()", setup)
+        # The queue must be BOUNDED. It was an unbounded SimpleQueue, so a burst
+        # of logging grew memory with no ceiling -- a release blocker in
+        # docs/intelligent_audio/FINAL_AUDIT.md.
+        self.assertIn("queue.Queue(maxsize=_LOG_QUEUE_MAX)", setup)
+        self.assertNotIn("queue.SimpleQueue()", setup)
+
+    def test_log_queue_drops_are_bounded_counted_and_reported(self):
+        """The queue was an unbounded SimpleQueue, so a burst grew memory with
+        no ceiling. Overflow must now drop, count, and say so."""
+        import logging as _logging
+        import queue as _queue
+
+        q = _queue.Queue(maxsize=3)
+        handler = self.singws._BoundedLogQueueHandler(q)
+
+        def record(msg):
+            return _logging.LogRecord("t", _logging.INFO, __file__, 0, msg, None, None)
+
+        for i in range(10):
+            handler.enqueue(record(f"line {i}"))
+        self.assertEqual(q.qsize(), 3, "queue must not grow past its maximum")
+        self.assertEqual(handler.dropped, 7, "every dropped record must be counted")
+
+        # Drain, then enqueue again: the gap is reported rather than hidden.
+        while not q.empty():
+            q.get_nowait()
+        handler.enqueue(record("after"))
+        drained = []
+        while not q.empty():
+            drained.append(q.get_nowait())
+        messages = [r.getMessage() for r in drained]
+        self.assertTrue(any("dropped 7 record(s)" in m for m in messages),
+                        f"expected a drop report, got {messages}")
+        self.assertEqual(handler.dropped, 0, "the counter resets once reported")
         diag = MAIN_SOURCE[
             MAIN_SOURCE.index("def _diag(msg: str):"):MAIN_SOURCE.index("def _diag_rate_limited")
         ]

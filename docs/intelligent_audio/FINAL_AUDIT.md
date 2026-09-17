@@ -170,15 +170,37 @@ None of these can be settled from the source tree. None should be guessed.
    microphone permission and will hit the same wall on every rebuild.
 3. **The effects audio path is unproven.** VFX0's own deliverable — a measured
    round-trip latency — does not exist.
-4. **Unbounded logging queue.** `0.2.18.1.py:2649` is `queue.SimpleQueue()`, still
-   unbounded, as `ARCHITECTURE.md` first flagged. Instrumentation deliberately
-   avoids it (its own bounded ring), which limits the exposure, but a burst of
-   ordinary logging is still unbounded memory. Bound it with a documented drop
-   policy before shipping.
-5. **`vfx_*` settings are not in `DEFAULTS`** (`0.2.18.1.py`), so effects settings
-   do not persist. Harmless today because nothing starts the helper, but it must
-   be closed before any effects UI lands, or the operator's choices will silently
-   vanish between launches.
+4. ~~**Unbounded logging queue.**~~ **Closed 2026-09-16.** Now
+   `queue.Queue(maxsize=_LOG_QUEUE_MAX)` behind `_BoundedLogQueueHandler`, which
+   drops when full, counts the drops, and reports the total once there is room —
+   a defined overflow policy rather than silent loss. Covered by a behavioural
+   test, not only a source assertion.
+5. ~~**`vfx_*` settings are not in `DEFAULTS`.**~~ **Closed 2026-09-16.** Added,
+   all off/neutral; nothing starts the helper yet.
+
+### Also closed 2026-09-16 — the quiet-dependency pattern
+
+`media_helpers.probe_duration_seconds()` caught a missing `mutagen` and returned
+0.0 for every file, which silently disabled trailing-silence detection. That
+exact shape — a lazy import, a bare `except`, and no test touching the real
+dependency — produced two separate faults in one day (mutagen, CoreLocation).
+The dependency failure is now reported once, loudly, while per-file failures stay
+quiet, and `dependency_status()` exposes it for diagnostics.
+
+### Still open — rotation card text clipping
+
+The card shows "No singer is" and "Queue a song to start ⋯" with the ends
+missing. **An attempted fix made it worse and was reverted** (verified on screen
+both times): `setWordWrap(True)` caused the title to wrap onto three lines,
+overflow the card and collide with the subtitle, because a word-wrapped QLabel
+has a small minimum width and the layout starves it.
+
+The useful finding for the next attempt: the text column is really only ~120 px
+wide in the running app. An isolated reproduction of the same row — avatar 96
+fixed, text stretch 1, meter 150 fixed, card 870 — gives the labels 590 px and
+does **not** reproduce the clipping. So the constraint is somewhere other than
+that row's obvious geometry, and it must be found before changing anything;
+guessing at the layout produced a worse regression once already.
 
 **Do not label this system production-ready.** Apple Silicon hardware testing and
 mixer routing are both unverified, and by the roadmap's own release gates that is
